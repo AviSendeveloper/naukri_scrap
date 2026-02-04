@@ -1,0 +1,12 @@
+{
+    "keywords": [
+        "nodejs developer",
+        "react developer",
+        "full stack developer",
+        "mern stack developer"
+    ],
+    "scraping": {
+        "pagesPerKeyword": 3,
+        "delayBetweenKeywords": 5000
+    }
+}
