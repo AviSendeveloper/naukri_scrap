@@ -5,8 +5,21 @@
         "full stack developer",
         "mern stack developer"
     ],
+    "skills": [
+        "node.js",
+        "react",
+        "mongodb",
+        "express",
+        "javascript",
+        "typescript"
+    ],
+    "experience": {
+        "min": 0,
+        "max": 5
+    },
     "scraping": {
         "pagesPerKeyword": 3,
-        "delayBetweenKeywords": 5000
+        "delayBetweenKeywords": 5000,
+        "scrapeJobDetails": true
     }
 }

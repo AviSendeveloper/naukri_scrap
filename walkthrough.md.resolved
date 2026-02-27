@@ -1,0 +1,47 @@
+# Enhanced Naukri Scraper — Walkthrough
+
+## Changes Made
+
+### [config.json](file:///Users/avijit/Projects/NaukriScrap/config.json)
+- Added `skills` array — skills to match against job listings
+- Added `experience: { min, max }` — used to filter Naukri search by experience range
+- Added [scrapeJobDetails](file:///Users/avijit/Projects/NaukriScrap/src/scraper/naukriScraper.js#314-504) flag — controls whether to visit each job page for detailed data
+
+### [Job.js](file:///Users/avijit/Projects/NaukriScrap/src/models/Job.js) — Schema Additions
+
+| New Field | Type | Purpose |
+|---|---|---|
+| `fullDescription` | String | Complete job description from detail page |
+| `keySkills` | [String] | All key skills from detail page |
+| `industryTypes` | [String] | Industry categories |
+| `jobPostedAt` | String | When job was posted |
+| `salaryOffered` | String | Salary range (if provided) |
+| `totalVacancy` | String | Number of openings (if provided) |
+| `matchedSkills` | [String] | Config skills that matched this job |
+| `experienceFilter` | String | Experience filter used in search |
+
+### [naukriScraper.js](file:///Users/avijit/Projects/NaukriScrap/src/scraper/naukriScraper.js)
+- **[buildSearchUrl()](file:///Users/avijit/Projects/NaukriScrap/src/scraper/naukriScraper.js#208-238)** now appends `&niyoMinExp=` and `&niyoMaxExp=` query params when experience is configured
+- **New [scrapeJobDetails(jobUrl)](file:///Users/avijit/Projects/NaukriScrap/src/scraper/naukriScraper.js#314-504)** — opens each job in a new browser tab and extracts full description, key skills, industry, salary, vacancy, and posted date via multiple CSS selector fallbacks
+- **New [matchSkills()](file:///Users/avijit/Projects/NaukriScrap/src/scraper/naukriScraper.js#31-51)** — case-insensitive matching between job skills and config skills (supports partial matches like "node.js" ↔ "Node.JS")
+- **[scrapeJobs()](file:///Users/avijit/Projects/NaukriScrap/src/scraper/naukriScraper.js#505-632)** — now accepts a `config` object and orchestrates detail scraping + skill matching per job
+
+### [index.js](file:///Users/avijit/Projects/NaukriScrap/src/index.js)
+- [loadConfig()](file:///Users/avijit/Projects/NaukriScrap/src/index.js#19-39) / [runFromConfig()](file:///Users/avijit/Projects/NaukriScrap/src/index.js#156-240) / [runSingleScrape()](file:///Users/avijit/Projects/NaukriScrap/src/index.js#116-155) now pass skills, experience, and [scrapeJobDetails](file:///Users/avijit/Projects/NaukriScrap/src/scraper/naukriScraper.js#314-504) through to the scraper
+- [listJobs()](file:///Users/avijit/Projects/NaukriScrap/src/index.js#241-304) displays key skills, matched skills, industry, vacancy, and salary
+- [showStats()](file:///Users/avijit/Projects/NaukriScrap/src/index.js#305-319) includes matched-skills job count
+
+## Verification
+
+- ✅ `node -c` syntax check passed on all 3 JS files
+- ✅ `node src/index.js --help` loads CLI successfully
+- ✅ Config.json parses without errors
+
+## Usage
+
+```bash
+# Edit config.json with your skills, experience, and keywords, then:
+npm start          # runs all keywords from config with login
+# or
+node src/index.js scrape -k "react developer" -l   # single keyword with login
+```

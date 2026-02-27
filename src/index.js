@@ -29,7 +29,12 @@ function loadConfig() {
     } catch (error) {
         console.error(chalk.red(`Error loading config.json: ${error.message}`));
     }
-    return { keywords: [], scraping: { pagesPerKeyword: 3, delayBetweenKeywords: 5000 } };
+    return {
+        keywords: [],
+        skills: [],
+        experience: null,
+        scraping: { pagesPerKeyword: 3, delayBetweenKeywords: 5000, scrapeJobDetails: true }
+    };
 }
 
 /**
@@ -54,15 +59,20 @@ function delay(ms) {
  * @param {Object} scraper - Initialized scraper instance
  * @param {string} keyword - Search keyword
  * @param {number} pages - Number of pages to scrape
+ * @param {Object} [config] - Configuration object with skills, experience, scrapeJobDetails
  * @returns {Object} - Results summary
  */
-async function scrapeAndSave(scraper, keyword, pages) {
-    // Scrape jobs
-    const jobs = await scraper.scrapeJobs(keyword, pages);
+async function scrapeAndSave(scraper, keyword, pages, config = {}) {
+    // Scrape jobs (pass config for experience/skills/detail scraping)
+    const jobs = await scraper.scrapeJobs(keyword, pages, {
+        experience: config.experience || null,
+        skills: config.skills || [],
+        scrapeJobDetails: config.scraping?.scrapeJobDetails !== false
+    });
 
     if (jobs.length === 0) {
         console.log(chalk.yellow('\n⚠️  No jobs found for the given keyword.'));
-        return { found: 0, saved: 0, duplicates: 0 };
+        return { found: 0, saved: 0, duplicates: 0, matched: 0 };
     }
 
     // Save to MongoDB
@@ -70,9 +80,15 @@ async function scrapeAndSave(scraper, keyword, pages) {
 
     let savedCount = 0;
     let duplicateCount = 0;
+    let matchedCount = 0;
 
     for (const jobData of jobs) {
         try {
+            // Track matched jobs
+            if (jobData.matchedSkills && jobData.matchedSkills.length > 0) {
+                matchedCount++;
+            }
+
             // Use upsert to avoid duplicates
             const result = await Job.findOneAndUpdate(
                 { jobUrl: jobData.jobUrl },
@@ -94,7 +110,7 @@ async function scrapeAndSave(scraper, keyword, pages) {
         }
     }
 
-    return { found: jobs.length, saved: savedCount, duplicates: duplicateCount };
+    return { found: jobs.length, saved: savedCount, duplicates: duplicateCount, matched: matchedCount };
 }
 
 /**
@@ -104,6 +120,7 @@ async function scrapeAndSave(scraper, keyword, pages) {
  * @param {boolean} withLogin - Whether to login first
  */
 async function runSingleScrape(keyword, pages, withLogin = false) {
+    const config = loadConfig();
     const scraper = new NaukriScraper();
 
     try {
@@ -117,8 +134,8 @@ async function runSingleScrape(keyword, pages, withLogin = false) {
             await scraper.login(email, password);
         }
 
-        // Scrape jobs
-        const results = await scrapeAndSave(scraper, keyword, pages);
+        // Scrape jobs (pass config for experience/skills)
+        const results = await scrapeAndSave(scraper, keyword, pages, config);
 
         // Summary
         console.log(chalk.green('\n✅ Scraping Complete!'));
@@ -126,6 +143,9 @@ async function runSingleScrape(keyword, pages, withLogin = false) {
         console.log(chalk.blue(`📊 Jobs Found: ${results.found}`));
         console.log(chalk.green(`💾 New Jobs Saved: ${results.saved}`));
         console.log(chalk.yellow(`🔄 Duplicates Skipped: ${results.duplicates}`));
+        if (config.skills && config.skills.length > 0) {
+            console.log(chalk.magenta(`🎯 Jobs Matched by Skills: ${results.matched}`));
+        }
         console.log(chalk.white('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n'));
 
     } finally {
@@ -139,8 +159,11 @@ async function runSingleScrape(keyword, pages, withLogin = false) {
 async function runFromConfig() {
     const config = loadConfig();
     const keywords = config.keywords || [];
+    const skills = config.skills || [];
+    const experience = config.experience || null;
     const pagesPerKeyword = config.scraping?.pagesPerKeyword || 3;
     const delayBetweenKeywords = config.scraping?.delayBetweenKeywords || 5000;
+    const scrapeJobDetails = config.scraping?.scrapeJobDetails !== false;
 
     if (keywords.length === 0) {
         console.log(chalk.yellow('\n⚠️  No keywords found in config.json'));
@@ -153,8 +176,18 @@ async function runFromConfig() {
     console.log(chalk.white(`   Keywords: ${keywords.join(', ')}`));
     console.log(chalk.white(`   Pages per keyword: ${pagesPerKeyword}`));
 
+    if (skills.length > 0) {
+        console.log(chalk.magenta(`   🔧 Skills to match: ${skills.join(', ')}`));
+    }
+    if (experience) {
+        console.log(chalk.magenta(`   📋 Experience filter: ${experience.min || 0}-${experience.max || 'any'} years`));
+    }
+    if (scrapeJobDetails) {
+        console.log(chalk.gray(`   📝 Detail scraping: enabled (will visit each job page)`));
+    }
+
     const scraper = new NaukriScraper();
-    let totalStats = { found: 0, saved: 0, duplicates: 0 };
+    let totalStats = { found: 0, saved: 0, duplicates: 0, matched: 0 };
 
     try {
         // Initialize browser
@@ -172,11 +205,12 @@ async function runFromConfig() {
             console.log(chalk.cyan.bold(`📌 Keyword ${i + 1}/${keywords.length}: "${keyword}"`));
             console.log(chalk.cyan(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`));
 
-            const results = await scrapeAndSave(scraper, keyword, pagesPerKeyword);
+            const results = await scrapeAndSave(scraper, keyword, pagesPerKeyword, config);
 
             totalStats.found += results.found;
             totalStats.saved += results.saved;
             totalStats.duplicates += results.duplicates;
+            totalStats.matched += results.matched;
 
             // Delay between keywords
             if (i < keywords.length - 1) {
@@ -194,6 +228,9 @@ async function runFromConfig() {
         console.log(chalk.blue(`📊 Total Jobs Found: ${totalStats.found}`));
         console.log(chalk.green(`💾 Total New Jobs Saved: ${totalStats.saved}`));
         console.log(chalk.yellow(`🔄 Total Duplicates Skipped: ${totalStats.duplicates}`));
+        if (skills.length > 0) {
+            console.log(chalk.magenta(`🎯 Total Jobs Matched by Skills: ${totalStats.matched}`));
+        }
         console.log(chalk.white('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n'));
 
     } finally {
@@ -214,7 +251,9 @@ async function listJobs(keyword, limit = 20) {
             $or: [
                 { searchKeyword: new RegExp(keyword, 'i') },
                 { title: new RegExp(keyword, 'i') },
-                { skills: { $in: [new RegExp(keyword, 'i')] } }
+                { skills: { $in: [new RegExp(keyword, 'i')] } },
+                { keySkills: { $in: [new RegExp(keyword, 'i')] } },
+                { matchedSkills: { $in: [new RegExp(keyword, 'i')] } }
             ]
         };
     }
@@ -236,14 +275,28 @@ async function listJobs(keyword, limit = 20) {
         console.log(chalk.white(`   🏢 Company: ${job.company}`));
         console.log(chalk.white(`   📍 Location: ${job.location}`));
         console.log(chalk.white(`   💼 Experience: ${job.experience}`));
-        console.log(chalk.white(`   💰 Salary: ${job.salary}`));
+        console.log(chalk.white(`   💰 Salary: ${job.salaryOffered || job.salary}`));
 
-        if (job.skills && job.skills.length > 0) {
+        if (job.keySkills && job.keySkills.length > 0) {
+            console.log(chalk.white(`   🔧 Key Skills: ${job.keySkills.slice(0, 8).join(', ')}`));
+        } else if (job.skills && job.skills.length > 0) {
             console.log(chalk.white(`   🔧 Skills: ${job.skills.slice(0, 5).join(', ')}`));
         }
 
+        if (job.matchedSkills && job.matchedSkills.length > 0) {
+            console.log(chalk.magenta(`   🎯 Matched Skills: ${job.matchedSkills.join(', ')}`));
+        }
+
+        if (job.industryTypes && job.industryTypes.length > 0) {
+            console.log(chalk.white(`   🏭 Industry: ${job.industryTypes.join(', ')}`));
+        }
+
+        if (job.totalVacancy && job.totalVacancy !== 'Not specified') {
+            console.log(chalk.white(`   👥 Vacancies: ${job.totalVacancy}`));
+        }
+
         console.log(chalk.gray(`   🔗 ${job.jobUrl}`));
-        console.log(chalk.gray(`   📅 Posted: ${job.postedDate} | Scraped: ${new Date(job.scrapedAt).toLocaleDateString()}`));
+        console.log(chalk.gray(`   📅 Posted: ${job.jobPostedAt || job.postedDate} | Scraped: ${new Date(job.scrapedAt).toLocaleDateString()}`));
     });
 
     console.log(chalk.white('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n'));
@@ -260,6 +313,7 @@ async function showStats() {
     console.log(chalk.blue(`📊 Total Jobs: ${stats.totalJobs}`));
     console.log(chalk.blue(`🏢 Unique Companies: ${stats.uniqueCompanies}`));
     console.log(chalk.blue(`🔑 Keywords Searched: ${stats.keywordsSearched.join(', ') || 'None'}`));
+    console.log(chalk.magenta(`🎯 Jobs with Matched Skills: ${stats.jobsWithMatchedSkills}`));
     console.log(chalk.white('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n'));
 }
 

@@ -1,0 +1,93 @@
+# Enhanced Naukri Scraper — Skills, Experience & Rich Job Data
+
+Enhance the scraper to filter by **skills** and **experience** (from [config.json](file:///Users/avijit/Projects/NaukriScrap/config.json)) and capture richer job data including full description, all key skills, industry types, posted date, salary, and vacancy count.
+
+## Proposed Changes
+
+### Config
+
+#### [MODIFY] [config.json](file:///Users/avijit/Projects/NaukriScrap/config.json)
+
+Add `skills` and `experience` fields alongside existing `keywords`:
+
+```json
+{
+    "keywords": ["nodejs developer", "react developer", "full stack developer", "mern stack developer"],
+    "skills": ["node.js", "react", "mongodb", "express", "javascript", "typescript"],
+    "experience": {
+        "min": 0,
+        "max": 5
+    },
+    "scraping": {
+        "pagesPerKeyword": 3,
+        "delayBetweenKeywords": 5000,
+        "scrapeJobDetails": true
+    }
+}
+```
+
+- **`skills`** — list of skills to match against job listings (scraped skills will be compared)
+- **`experience`** — min/max years; used to build Naukri URL experience filter params
+- **`scrapeJobDetails`** — whether to navigate into each job page for full description (slower but richer data)
+
+---
+
+### Job Model
+
+#### [MODIFY] [Job.js](file:///Users/avijit/Projects/NaukriScrap/src/models/Job.js)
+
+Add new fields to the Mongoose schema:
+
+| Field | Type | Description |
+|---|---|---|
+| `fullDescription` | `String` | Complete job description from individual job page |
+| `keySkills` | `[String]` | All key skills listed on the job detail page |
+| `industryTypes` | `[String]` | Industry type(s) of the job |
+| `jobPostedAt` | `String` | When the job was posted (e.g. "2 days ago", exact date) |
+| `salaryOffered` | `String` | Salary range if provided |
+| `totalVacancy` | `String` | Number of openings if provided |
+| `matchedSkills` | `[String]` | Skills from config that matched with job's skills |
+| `experienceFilter` | `String` | Experience filter used during search |
+
+---
+
+### Scraper
+
+#### [MODIFY] [naukriScraper.js](file:///Users/avijit/Projects/NaukriScrap/src/scraper/naukriScraper.js)
+
+1. **[buildSearchUrl()](file:///Users/avijit/Projects/NaukriScrap/src/scraper/naukriScraper.js#187-202)** — Accept `experience` object and append `&niyoMinExp={min}&niyoMaxExp={max}` query params to filter by experience in the URL
+2. **[extractJobCards()](file:///Users/avijit/Projects/NaukriScrap/src/scraper/naukriScraper.js#203-277)** — Continue extracting basic data from listing cards (title, company, location, etc.)
+3. **New `scrapeJobDetails(jobUrl)`** — Visit individual job pages to extract:
+   - Full description (`div.styles_JDC__dang-inner-html__h0K4t` or similar)
+   - Key skills (`div.key-skill` / `a.chip`)
+   - Industry type
+   - Posted date
+   - Salary (if available)
+   - Vacancy count (if available)
+4. **[scrapeJobs()](file:///Users/avijit/Projects/NaukriScrap/src/scraper/naukriScraper.js#278-344)** — After extracting listing cards, optionally iterate each job URL and call `scrapeJobDetails()` to enrich data
+5. **New `matchSkills(jobSkills, configSkills)`** — Compare job skills with config skills, return matched list
+
+---
+
+### CLI / Entry Point
+
+#### [MODIFY] [index.js](file:///Users/avijit/Projects/NaukriScrap/src/index.js)
+
+- [loadConfig()](file:///Users/avijit/Projects/NaukriScrap/src/index.js#19-34) — Also read `skills`, `experience`, and `scrapeJobDetails` from config
+- [runFromConfig()](file:///Users/avijit/Projects/NaukriScrap/src/index.js#136-203) — Pass `experience` to [buildSearchUrl()](file:///Users/avijit/Projects/NaukriScrap/src/scraper/naukriScraper.js#187-202) and `skills` to skill matching logic
+- [scrapeAndSave()](file:///Users/avijit/Projects/NaukriScrap/src/index.js#52-99) — Accept config object, pass to scraper, store `matchedSkills` with each job
+- [listJobs()](file:///Users/avijit/Projects/NaukriScrap/src/index.js#204-251) — Show new fields (key skills, industry, salary, vacancy) in output
+
+---
+
+## Verification Plan
+
+### Manual Verification
+
+1. **Config validation**: Run `node src/index.js run` and verify it reads `skills`, `experience` from [config.json](file:///Users/avijit/Projects/NaukriScrap/config.json) by checking console output
+2. **URL construction**: Add a `console.log` in [buildSearchUrl](file:///Users/avijit/Projects/NaukriScrap/src/scraper/naukriScraper.js#187-202) temporarily to verify the generated URL includes experience params (e.g. `&niyoMinExp=0&niyoMaxExp=5`)
+3. **Job detail scraping**: Run the scraper for 1 keyword with 1 page and `scrapeJobDetails: true`, verify the stored MongoDB documents contain `fullDescription`, `keySkills`, `industryTypes`, `salaryOffered`, `totalVacancy`, and `jobPostedAt`
+4. **Skill matching**: Verify `matchedSkills` is populated in saved jobs by running `node src/index.js list -l 5`
+
+> [!IMPORTANT]
+> Since this is a web scraper, **Naukri.com's page structure may change**. The CSS selectors used for extracting detail-page data are based on common patterns observed on the site and may need adjustment if the DOM has changed.
