@@ -129,14 +129,14 @@ class NaukriScraper {
      */
     async login(email, password) {
         if (!email || !password) {
-            console.log('⚠️  No Naukri credentials provided, continuing without login...');
+            console.log('⚠️ No Naukri credentials provided, continuing without login...');
             return false;
         }
 
         console.log('🔐 Logging into Naukri.com...');
 
         try {
-            // Navigate to login page
+            // Open login page
             await this.page.goto('https://www.naukri.com/nlogin/login', {
                 waitUntil: 'networkidle2',
                 timeout: 30000
@@ -144,58 +144,87 @@ class NaukriScraper {
 
             await randomDelay(1500, 2500);
 
-            // Wait for login form
-            await this.page.waitForSelector('input[placeholder*="Email"], input[type="text"], #usernameField', {
-                timeout: 10000
+            // Wait for email field
+            await this.page.waitForSelector('input[type="text"], input[placeholder*="Email"]');
+
+            // Type email
+            // const emailInput = await this.page.$('input[type="text"], input[placeholder*="Email"]');
+            const emailInput = await this.page.waitForSelector('#usernameField');
+            await emailInput.click({ clickCount: 3 });
+            await emailInput.type(email, { delay: 50 });
+
+            console.log('📧 Email entered');
+
+            await randomDelay(500, 1000);
+
+            // Type password
+            const passwordInput = await this.page.$('input[type="password"]');
+            await passwordInput.click();
+            await passwordInput.type(password, { delay: 50 });
+
+            console.log('🔑 Password entered');
+
+            await randomDelay(500, 1000);
+
+            // Find login button
+            const loginButton = await this.page.$('button[type="submit"]:not(.otpButton)');
+
+            if (!loginButton) {
+                throw new Error("Login button not found");
+            }
+
+            // Wait for login API request
+            const loginRequestPromise = this.page.waitForRequest(req =>
+                req.method() === 'POST' &&
+                req.url().includes('central-login')
+            );
+
+            await loginButton.click();
+
+            // Capture request
+            const loginRequest = await loginRequestPromise;
+
+            console.log("🚀 LOGIN API:", loginRequest.url());
+            console.log("📦 LOGIN PAYLOAD:", loginRequest.postData());
+
+            // capture screenshot
+            /*
+            // wait a bit so UI updates
+            await randomDelay(3000, 3500);
+
+            console.log("📸 Taking screenshot...");
+
+            await this.page.screenshot({
+                path: "after-login.png",
+                fullPage: true
             });
 
-            // Enter email
-            const emailInput = await this.page.$('input[placeholder*="Email"], input[type="text"], #usernameField');
-            if (emailInput) {
-                await emailInput.click({ clickCount: 3 }); // Select all existing text
-                await emailInput.type(email, { delay: 50 });
-            }
+            console.log("✅ Screenshot captured");
+            */
 
-            await randomDelay(500, 1000);
+            await randomDelay(4000, 5000);
 
-            // Enter password
-            const passwordInput = await this.page.$('input[type="password"], #passwordField');
-            if (passwordInput) {
-                await passwordInput.click();
-                await passwordInput.type(password, { delay: 50 });
-            }
-
-            await randomDelay(500, 1000);
-
-            // Click login button
-            const loginButton = await this.page.$('button[type="submit"], .loginButton, button:has-text("Login")');
-            if (loginButton) {
-                await loginButton.click();
-            } else {
-                // Try pressing Enter as fallback
-                await this.page.keyboard.press('Enter');
-            }
-
-            // Wait for navigation after login
-            await randomDelay(3000, 5000);
-
-            // Check if login was successful by looking for user menu or dashboard elements
+            // Check if logged in
             try {
-                await this.page.waitForSelector('.nI-gNb-drawer, .user-name, [class*="profile"], .view-all-link', {
+                await this.page.waitForSelector('.nI-gNb-drawer, .user-name, [class*="profile"]', {
                     timeout: 10000
                 });
+
                 console.log('✅ Successfully logged into Naukri.com!');
                 this.isLoggedIn = true;
                 return true;
-            } catch (e) {
-                // Check for error messages
+
+            } catch {
+
                 const errorMsg = await this.page.$('.error-msg, .error, [class*="error"]');
+
                 if (errorMsg) {
-                    const errorText = await this.page.evaluate(el => el.textContent, errorMsg);
-                    console.log(`❌ Login failed: ${errorText}`);
+                    const text = await this.page.evaluate(el => el.textContent, errorMsg);
+                    console.log(`❌ Login failed: ${text}`);
                 } else {
-                    console.log('⚠️  Login status uncertain, continuing anyway...');
+                    console.log('⚠️ Login status uncertain, continuing anyway...');
                 }
+
                 return false;
             }
 
@@ -204,6 +233,7 @@ class NaukriScraper {
             return false;
         }
     }
+
 
     /**
      * Build the Naukri search URL for a keyword with optional experience filter
