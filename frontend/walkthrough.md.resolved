@@ -1,0 +1,83 @@
+# NaukriScrap Frontend Walkthrough
+
+## What Was Built
+
+A modern dark-themed React admin panel for the NaukriScrap job scraper, built with **Vite + React** in the `frontend/` directory.
+
+### Project Structure
+```
+frontend/
+├── index.html
+├── package.json
+├── vite.config.js
+└── src/
+    ├── App.jsx              — Router (5 routes)
+    ├── main.jsx             — Entry point
+    ├── index.css            — Full design system
+    ├── components/
+    │   ├── Sidebar.jsx      — Navigation + scraper action
+    │   └── Header.jsx       — Dynamic title + search
+    ├── layouts/
+    │   └── MainLayout.jsx   — Sidebar + Header + Content
+    ├── pages/
+    │   ├── Dashboard.jsx    — Stats, recent jobs, charts
+    │   ├── Jobs.jsx         — Filtered table + pagination
+    │   ├── JobDetail.jsx    — Full job view
+    │   ├── Analytics.jsx    — Bar & donut charts
+    │   └── Settings.jsx     — Config editor
+    └── data/
+        └── mockData.js      — 25 realistic jobs
+```
+
+---
+
+## Pages
+
+### Dashboard
+4 stat cards, recent jobs table, jobs-by-keyword chart, activity feed, and top skills cloud.
+
+![Dashboard](dashboard_page_1772984822616.png)
+
+### Jobs
+Searchable and filterable table with keyword/experience filters, matched skill tags, and pagination.
+
+![Jobs](jobs_page_1772984835312.png)
+
+### Job Detail
+Full job view with description, matched skills highlighting, metadata sidebar, and external link to Naukri.
+
+![Job Detail](job_detail_page_1772984850104.png)
+
+### Analytics
+Bar and donut charts for keywords, location, companies, skills, salary distribution, and industry types.
+
+![Analytics](analytics_page_1772984868095.png)
+
+### Settings
+Editable config with add/remove keywords & skills, experience range, scraping parameters, and toggle switch.
+
+![Settings](settings_page_1772984886030.png)
+
+---
+
+## Verification
+
+| Check | Result |
+|-------|--------|
+| `npm run build` | ✅ 55 modules, 0 errors, 484ms |
+| Dev server | ✅ Running on port 3000 |
+| All 5 pages render | ✅ Verified in browser |
+| Sidebar navigation | ✅ Active route highlighting works |
+| Layout consistency | ✅ Sidebar + Header + Content on all pages |
+
+### Full Navigation Recording
+
+![App walkthrough](frontend_visual_check_1772984806783.webp)
+
+## How to Run
+
+```bash
+cd frontend
+npm install
+npm run dev     # → http://localhost:3000
+```
