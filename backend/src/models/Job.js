@@ -86,6 +86,12 @@ const jobSchema = new mongoose.Schema({
         type: [String],
         default: []
     },
+    matchPercentage: {
+        type: Number,
+        default: 0,
+        min: 0,
+        max: 100
+    },
     experienceFilter: {
         type: String,
         trim: true,

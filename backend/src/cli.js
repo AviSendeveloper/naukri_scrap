@@ -9,6 +9,7 @@ const chalk = require('chalk');
 const { connectDB, closeDB } = require('./config/database');
 const Job = require('./models/Job');
 const NaukriScraper = require('./scraper/naukriScraper');
+const { createJobQueue } = require('./config/queue');
 
 // Package info
 const packageInfo = require('../package.json');
@@ -55,62 +56,63 @@ function delay(ms) {
 }
 
 /**
- * Scrape jobs and save to MongoDB
+ * Scrape basic job cards and dispatch each to the BullMQ queue.
+ * Detail scraping is handled asynchronously by the worker.
  * @param {Object} scraper - Initialized scraper instance
  * @param {string} keyword - Search keyword
  * @param {number} pages - Number of pages to scrape
- * @param {Object} [config] - Configuration object with skills, experience, scrapeJobDetails
+ * @param {Object} [config] - Configuration object with skills, experience
+ * @param {Queue} jobQueue - BullMQ Queue instance
  * @returns {Object} - Results summary
  */
-async function scrapeAndSave(scraper, keyword, pages, config = {}) {
-    // Scrape jobs (pass config for experience/skills/detail scraping)
+async function scrapeAndDispatch(scraper, keyword, pages, config = {}, jobQueue) {
+    // Scrape basic job cards only (skip detail scraping – worker does it)
     const jobs = await scraper.scrapeJobs(keyword, pages, {
         experience: config.experience || null,
         skills: config.skills || [],
-        scrapeJobDetails: config.scraping?.scrapeJobDetails !== false
+        scrapeJobDetails: false  // never scrape details in producer
     });
 
     if (jobs.length === 0) {
         console.log(chalk.yellow('\n⚠️  No jobs found for the given keyword.'));
-        return { found: 0, saved: 0, duplicates: 0, matched: 0 };
+        return { found: 0, dispatched: 0 };
     }
 
-    // Save to MongoDB
-    console.log(chalk.blue('\n💾 Saving jobs to MongoDB...'));
+    // Dispatch each job to the queue
+    console.log(chalk.blue(`\n📤 Dispatching ${jobs.length} jobs to the message queue...`));
 
-    let savedCount = 0;
-    let duplicateCount = 0;
-    let matchedCount = 0;
+    let dispatched = 0;
+    const experienceLabel = config.experience
+        ? `${config.experience.min || 0}-${config.experience.max || 'any'} yrs`
+        : '';
 
-    for (const jobData of jobs) {
+    for (const job of jobs) {
         try {
-            // Track matched jobs
-            if (jobData.matchedSkills && jobData.matchedSkills.length > 0) {
-                matchedCount++;
-            }
-
-            // Use upsert to avoid duplicates
-            const result = await Job.findOneAndUpdate(
-                { jobUrl: jobData.jobUrl },
-                jobData,
-                { upsert: true, new: true, setDefaultsOnInsert: true }
-            );
-
-            if (result.isNew !== false) {
-                savedCount++;
-            } else {
-                duplicateCount++;
-            }
+            await jobQueue.add('scrape-job-detail', {
+                jobUrl: job.jobUrl,
+                searchKeyword: keyword,
+                pageNumber: job.pageNumber || 1,
+                configSkills: config.skills || [],
+                experienceFilter: experienceLabel,
+                basicDetails: {
+                    title: job.title,
+                    company: job.company,
+                    location: job.location,
+                    experience: job.experience,
+                    salary: job.salary,
+                    skills: job.skills,
+                    description: job.description,
+                    postedDate: job.postedDate,
+                },
+            });
+            dispatched++;
         } catch (error) {
-            if (error.code === 11000) {
-                duplicateCount++;
-            } else {
-                console.error(chalk.red(`Error saving job: ${error.message}`));
-            }
+            console.error(chalk.red(`  Error dispatching job "${job.title}": ${error.message}`));
         }
     }
 
-    return { found: jobs.length, saved: savedCount, duplicates: duplicateCount, matched: matchedCount };
+    console.log(chalk.green(`  ✅ Dispatched ${dispatched}/${jobs.length} jobs to queue`));
+    return { found: jobs.length, dispatched };
 }
 
 /**
@@ -122,6 +124,7 @@ async function scrapeAndSave(scraper, keyword, pages, config = {}) {
 async function runSingleScrape(keyword, pages, withLogin = false) {
     const config = loadConfig();
     const scraper = new NaukriScraper();
+    const jobQueue = createJobQueue();
 
     try {
         // Initialize browser
@@ -134,22 +137,20 @@ async function runSingleScrape(keyword, pages, withLogin = false) {
             await scraper.login(email, password);
         }
 
-        // Scrape jobs (pass config for experience/skills)
-        const results = await scrapeAndSave(scraper, keyword, pages, config);
+        // Scrape basic cards and dispatch to queue
+        const results = await scrapeAndDispatch(scraper, keyword, pages, config, jobQueue);
 
         // Summary
-        console.log(chalk.green('\n✅ Scraping Complete!'));
+        console.log(chalk.green('\n✅ Scraping & Dispatch Complete!'));
         console.log(chalk.white('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'));
         console.log(chalk.blue(`📊 Jobs Found: ${results.found}`));
-        console.log(chalk.green(`💾 New Jobs Saved: ${results.saved}`));
-        console.log(chalk.yellow(`🔄 Duplicates Skipped: ${results.duplicates}`));
-        if (config.skills && config.skills.length > 0) {
-            console.log(chalk.magenta(`🎯 Jobs Matched by Skills: ${results.matched}`));
-        }
+        console.log(chalk.green(`📤 Jobs Dispatched to Queue: ${results.dispatched}`));
+        console.log(chalk.gray(`   ℹ️  Worker will process details and save to DB`));
         console.log(chalk.white('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n'));
 
     } finally {
         await scraper.closeBrowser();
+        await jobQueue.close();
     }
 }
 
@@ -163,7 +164,6 @@ async function runFromConfig() {
     const experience = config.experience || null;
     const pagesPerKeyword = config.scraping?.pagesPerKeyword || 3;
     const delayBetweenKeywords = config.scraping?.delayBetweenKeywords || 5000;
-    const scrapeJobDetails = config.scraping?.scrapeJobDetails !== false;
 
     if (keywords.length === 0) {
         console.log(chalk.yellow('\n⚠️  No keywords found in config.json'));
@@ -182,12 +182,11 @@ async function runFromConfig() {
     if (experience) {
         console.log(chalk.magenta(`   📋 Experience filter: ${experience.min || 0}-${experience.max || 'any'} years`));
     }
-    if (scrapeJobDetails) {
-        console.log(chalk.gray(`   📝 Detail scraping: enabled (will visit each job page)`));
-    }
+    console.log(chalk.gray(`   📝 Detail scraping: handled by worker via message queue`));
 
     const scraper = new NaukriScraper();
-    let totalStats = { found: 0, saved: 0, duplicates: 0, matched: 0 };
+    const jobQueue = createJobQueue();
+    let totalStats = { found: 0, dispatched: 0 };
 
     try {
         // Initialize browser
@@ -198,19 +197,17 @@ async function runFromConfig() {
         const password = process.env.NAUKRI_PASSWORD;
         await scraper.login(email, password);
 
-        // Scrape each keyword
+        // Scrape each keyword and dispatch to queue
         for (let i = 0; i < keywords.length; i++) {
             const keyword = keywords[i];
             console.log(chalk.cyan(`\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`));
             console.log(chalk.cyan.bold(`📌 Keyword ${i + 1}/${keywords.length}: "${keyword}"`));
             console.log(chalk.cyan(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`));
 
-            const results = await scrapeAndSave(scraper, keyword, pagesPerKeyword, config);
+            const results = await scrapeAndDispatch(scraper, keyword, pagesPerKeyword, config, jobQueue);
 
             totalStats.found += results.found;
-            totalStats.saved += results.saved;
-            totalStats.duplicates += results.duplicates;
-            totalStats.matched += results.matched;
+            totalStats.dispatched += results.dispatched;
 
             // Delay between keywords
             if (i < keywords.length - 1) {
@@ -221,20 +218,18 @@ async function runFromConfig() {
 
         // Final summary
         console.log(chalk.green('\n\n╔════════════════════════════════════════╗'));
-        console.log(chalk.green('║        🎉 ALL SCRAPING COMPLETE!       ║'));
+        console.log(chalk.green('║     🎉 ALL SCRAPING & DISPATCH DONE!  ║'));
         console.log(chalk.green('╚════════════════════════════════════════╝'));
         console.log(chalk.white('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'));
         console.log(chalk.blue(`🔑 Keywords Processed: ${keywords.length}`));
         console.log(chalk.blue(`📊 Total Jobs Found: ${totalStats.found}`));
-        console.log(chalk.green(`💾 Total New Jobs Saved: ${totalStats.saved}`));
-        console.log(chalk.yellow(`🔄 Total Duplicates Skipped: ${totalStats.duplicates}`));
-        if (skills.length > 0) {
-            console.log(chalk.magenta(`🎯 Total Jobs Matched by Skills: ${totalStats.matched}`));
-        }
+        console.log(chalk.green(`📤 Total Jobs Dispatched: ${totalStats.dispatched}`));
+        console.log(chalk.gray(`   ℹ️  Run "npm run worker" to process the queue`));
         console.log(chalk.white('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n'));
 
     } finally {
         await scraper.closeBrowser();
+        await jobQueue.close();
     }
 }
 

@@ -11,6 +11,7 @@
     "scrape": "node src/cli.js scrape",
     "list": "node src/cli.js list",
     "stats": "node src/cli.js stats",
+    "worker": "node src/workers/index.js",
     "api": "node src/index.js",
     "dev-api": "nodemon src/index.js"
   },
@@ -25,11 +26,13 @@
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
+    "bullmq": "^5.71.0",
     "chalk": "^4.1.2",
     "commander": "^14.0.3",
     "cors": "^2.8.5",
     "dotenv": "^17.2.3",
     "express": "^4.21.2",
+    "ioredis": "^5.10.0",
     "mongoose": "^9.1.5",
     "puppeteer": "^24.36.1"
   },
