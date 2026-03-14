@@ -4,13 +4,15 @@
   "description": "Scrape job listings from Naukri.com and store in MongoDB",
   "main": "src/index.js",
   "bin": {
-    "naukri-scraper": "./src/index.js"
+    "naukri-scraper": "./src/cli.js"
   },
   "scripts": {
-    "start": "node src/index.js run",
-    "scrape": "node src/index.js scrape",
-    "list": "node src/index.js list",
-    "stats": "node src/index.js stats"
+    "start": "node src/cli.js run",
+    "scrape": "node src/cli.js scrape",
+    "list": "node src/cli.js list",
+    "stats": "node src/cli.js stats",
+    "api": "node src/index.js",
+    "dev-api": "nodemon src/index.js"
   },
   "keywords": [
     "naukri",
@@ -25,8 +27,13 @@
   "dependencies": {
     "chalk": "^4.1.2",
     "commander": "^14.0.3",
+    "cors": "^2.8.5",
     "dotenv": "^17.2.3",
+    "express": "^4.21.2",
     "mongoose": "^9.1.5",
     "puppeteer": "^24.36.1"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.14"
   }
 }
