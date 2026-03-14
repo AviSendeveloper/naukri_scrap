@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
     HiOutlineSearch,
@@ -7,50 +7,84 @@ import {
     HiOutlineChevronLeft,
     HiOutlineChevronRight
 } from 'react-icons/hi'
-import { mockJobs } from '../data/mockData'
+import { fetchJobs, fetchKeywords } from '../services/api'
+import useDebounce from '../hooks/useDebounce'
+import Loader from '../components/Loader'
 
-const ITEMS_PER_PAGE = 8
+const ITEMS_PER_PAGE = 10
 
 export default function Jobs() {
     const navigate = useNavigate()
+
+    // Filter state
     const [search, setSearch] = useState('')
     const [keywordFilter, setKeywordFilter] = useState('')
-    const [experienceFilter, setExperienceFilter] = useState('')
     const [currentPage, setCurrentPage] = useState(1)
 
-    const uniqueKeywords = [...new Set(mockJobs.map(j => j.searchKeyword))]
+    // Data state
+    const [jobs, setJobs] = useState([])
+    const [pagination, setPagination] = useState(null)
+    const [keywords, setKeywords] = useState([])
+    const [isLoading, setIsLoading] = useState(true)
 
-    const filteredJobs = useMemo(() => {
-        return mockJobs.filter(job => {
-            const matchesSearch = !search ||
-                job.title.toLowerCase().includes(search.toLowerCase()) ||
-                job.company.toLowerCase().includes(search.toLowerCase()) ||
-                job.skills.some(s => s.toLowerCase().includes(search.toLowerCase()))
+    // Debounced search (500ms)
+    const debouncedSearch = useDebounce(search, 500)
 
-            const matchesKeyword = !keywordFilter || job.searchKeyword === keywordFilter
+    // Fetch unique keywords once for the dropdown
+    useEffect(() => {
+        fetchKeywords()
+            .then(res => setKeywords(res.data || []))
+            .catch(err => console.error('Failed to load keywords:', err))
+    }, [])
 
-            const matchesExperience = !experienceFilter || (() => {
-                const minExp = parseInt(job.experience)
-                if (experienceFilter === '0-2') return minExp <= 2
-                if (experienceFilter === '3-5') return minExp >= 2 && minExp <= 5
-                if (experienceFilter === '5+') return minExp >= 5
-                return true
-            })()
+    // Fetch jobs whenever page, debouncedSearch, or keyword filter changes
+    const loadJobs = useCallback(async () => {
+        setIsLoading(true)
+        try {
+            const res = await fetchJobs({
+                page: currentPage,
+                limit: ITEMS_PER_PAGE,
+                search: debouncedSearch,
+                keyword: keywordFilter
+            })
+            setJobs(res.data || [])
+            setPagination(res.pagination || null)
+        } catch (err) {
+            console.error('Failed to load jobs:', err)
+            setJobs([])
+            setPagination(null)
+        } finally {
+            setIsLoading(false)
+        }
+    }, [currentPage, debouncedSearch, keywordFilter])
 
-            return matchesSearch && matchesKeyword && matchesExperience
-        })
-    }, [search, keywordFilter, experienceFilter])
-
-    const totalPages = Math.ceil(filteredJobs.length / ITEMS_PER_PAGE)
-    const paginatedJobs = filteredJobs.slice(
-        (currentPage - 1) * ITEMS_PER_PAGE,
-        currentPage * ITEMS_PER_PAGE
-    )
+    useEffect(() => {
+        loadJobs()
+    }, [loadJobs])
 
     // Reset page when filters change
-    const handleFilterChange = (setter) => (e) => {
-        setter(e.target.value)
+    useEffect(() => {
         setCurrentPage(1)
+    }, [debouncedSearch, keywordFilter])
+
+    const totalPages = pagination?.totalPages || 1
+    const totalJobs = pagination?.totalJobs || 0
+
+    // Generate pagination numbers with ellipsis
+    const getPaginationGroup = () => {
+        const pages = []
+        if (totalPages <= 5) {
+            for (let i = 1; i <= totalPages; i++) pages.push(i)
+        } else {
+            if (currentPage <= 3) {
+                pages.push(1, 2, 3, '...', totalPages)
+            } else if (currentPage >= totalPages - 2) {
+                pages.push(1, '...', totalPages - 2, totalPages - 1, totalPages)
+            } else {
+                pages.push(1, '...', currentPage - 1, currentPage, currentPage + 1, '...', totalPages)
+            }
+        }
+        return pages
     }
 
     return (
@@ -58,7 +92,7 @@ export default function Jobs() {
             <div className="page-header">
                 <div>
                     <h2>All Jobs</h2>
-                    <p>{filteredJobs.length} jobs found</p>
+                    <p>{totalJobs} jobs found</p>
                 </div>
                 <button className="btn btn-primary">
                     <HiOutlineFilter /> Export
@@ -71,9 +105,9 @@ export default function Jobs() {
                     <HiOutlineSearch className="filter-search-icon" />
                     <input
                         type="text"
-                        placeholder="Search by title, company, or skill..."
+                        placeholder="Search by title..."
                         value={search}
-                        onChange={(e) => { setSearch(e.target.value); setCurrentPage(1); }}
+                        onChange={(e) => setSearch(e.target.value)}
                     />
                 </div>
 
@@ -81,89 +115,85 @@ export default function Jobs() {
                     className="form-select"
                     style={{ width: 'auto', minWidth: '180px' }}
                     value={keywordFilter}
-                    onChange={handleFilterChange(setKeywordFilter)}
+                    onChange={(e) => setKeywordFilter(e.target.value)}
                 >
                     <option value="">All Keywords</option>
-                    {uniqueKeywords.map(kw => (
+                    {keywords.map(kw => (
                         <option key={kw} value={kw}>{kw}</option>
                     ))}
-                </select>
-
-                <select
-                    className="form-select"
-                    style={{ width: 'auto', minWidth: '160px' }}
-                    value={experienceFilter}
-                    onChange={handleFilterChange(setExperienceFilter)}
-                >
-                    <option value="">All Experience</option>
-                    <option value="0-2">0-2 years</option>
-                    <option value="3-5">3-5 years</option>
-                    <option value="5+">5+ years</option>
                 </select>
             </div>
 
             {/* Jobs Table */}
             <div className="card" style={{ padding: 0 }}>
-                <div className="table-container">
-                    <table className="data-table">
-                        <thead>
-                            <tr>
-                                <th>Position</th>
-                                <th>Location</th>
-                                <th>Experience</th>
-                                <th>Salary</th>
-                                <th>Skills Match</th>
-                                <th>Posted</th>
-                                <th></th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {paginatedJobs.map(job => (
-                                <tr key={job._id} onClick={() => navigate(`/jobs/${job._id}`)}>
-                                    <td>
-                                        <span className="table-job-title">{job.title}</span>
-                                        <span className="table-company">{job.company}</span>
-                                    </td>
-                                    <td style={{ whiteSpace: 'nowrap' }}>{job.location.split(',')[0]}</td>
-                                    <td><span className="tag neutral">{job.experience}</span></td>
-                                    <td style={{ whiteSpace: 'nowrap', fontSize: 'var(--font-sm)' }}>
-                                        {job.salary}
-                                    </td>
-                                    <td>
-                                        <div className="tags-list">
-                                            {job.matchedSkills.slice(0, 3).map(s => (
-                                                <span key={s} className="tag secondary">{s}</span>
-                                            ))}
-                                            {job.matchedSkills.length > 3 && (
-                                                <span className="tag neutral">+{job.matchedSkills.length - 3}</span>
-                                            )}
-                                        </div>
-                                    </td>
-                                    <td style={{ whiteSpace: 'nowrap', fontSize: 'var(--font-sm)', color: 'var(--text-muted)' }}>
-                                        {job.postedDate}
-                                    </td>
-                                    <td>
-                                        <a
-                                            href={job.jobUrl}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            onClick={(e) => e.stopPropagation()}
-                                            style={{ color: 'var(--text-muted)' }}
-                                        >
-                                            <HiOutlineExternalLink />
-                                        </a>
-                                    </td>
+                {isLoading ? (
+                    <Loader message="Fetching jobs..." />
+                ) : jobs.length === 0 ? (
+                    <div className="loader-container">
+                        <p className="loader-message">No jobs found.</p>
+                    </div>
+                ) : (
+                    <div className="table-container">
+                        <table className="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Position</th>
+                                    <th>Location</th>
+                                    <th>Experience</th>
+                                    <th>Search Keyword</th>
+                                    <th>Skills Match</th>
+                                    <th>Posted</th>
+                                    <th></th>
                                 </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                </div>
+                            </thead>
+                            <tbody>
+                                {jobs.map(job => (
+                                    <tr key={job._id} onClick={() => navigate(`/jobs/${job._id}`)}>
+                                        <td>
+                                            <span className="table-job-title">{job.title}</span>
+                                            <span className="table-company">{job.company}</span>
+                                        </td>
+                                        <td style={{ whiteSpace: 'nowrap' }}>{job.location?.split(',')[0]}</td>
+                                        <td><span className="tag neutral">{job.experience}</span></td>
+                                        <td>
+                                            <span className="tag primary">{job.searchKeyword}</span>
+                                        </td>
+                                        <td>
+                                            <div className="tags-list">
+                                                {(job.matchedSkills || []).slice(0, 3).map(s => (
+                                                    <span key={s} className="tag secondary">{s}</span>
+                                                ))}
+                                                {(job.matchedSkills || []).length > 3 && (
+                                                    <span className="tag neutral">+{job.matchedSkills.length - 3}</span>
+                                                )}
+                                            </div>
+                                        </td>
+                                        <td style={{ whiteSpace: 'nowrap', fontSize: 'var(--font-sm)', color: 'var(--text-muted)' }}>
+                                            {job.postedDate}
+                                        </td>
+                                        <td>
+                                            <a
+                                                href={job.jobUrl}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                onClick={(e) => e.stopPropagation()}
+                                                style={{ color: 'var(--text-muted)' }}
+                                            >
+                                                <HiOutlineExternalLink />
+                                            </a>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                )}
 
                 {/* Pagination */}
-                {totalPages > 1 && (
+                {!isLoading && totalPages > 1 && (
                     <div className="pagination" style={{ padding: 'var(--space-4) var(--space-6)' }}>
                         <span className="pagination-info">
-                            Showing {(currentPage - 1) * ITEMS_PER_PAGE + 1}–{Math.min(currentPage * ITEMS_PER_PAGE, filteredJobs.length)} of {filteredJobs.length}
+                            Showing {(currentPage - 1) * ITEMS_PER_PAGE + 1}–{Math.min(currentPage * ITEMS_PER_PAGE, totalJobs)} of {totalJobs}
                         </span>
                         <div className="pagination-controls">
                             <button
@@ -173,14 +203,18 @@ export default function Jobs() {
                             >
                                 <HiOutlineChevronLeft />
                             </button>
-                            {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
-                                <button
-                                    key={page}
-                                    className={`pagination-btn ${page === currentPage ? 'active' : ''}`}
-                                    onClick={() => setCurrentPage(page)}
-                                >
-                                    {page}
-                                </button>
+                            {getPaginationGroup().map((item, index) => (
+                                item === '...' ? (
+                                    <span key={`ellipsis-${index}`} className="pagination-ellipsis">...</span>
+                                ) : (
+                                    <button
+                                        key={item}
+                                        className={`pagination-btn ${item === currentPage ? 'active' : ''}`}
+                                        onClick={() => setCurrentPage(item)}
+                                    >
+                                        {item}
+                                    </button>
+                                )
                             ))}
                             <button
                                 className="pagination-btn"

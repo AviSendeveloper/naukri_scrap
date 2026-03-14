@@ -104,4 +104,24 @@ async function getJobById(req, res) {
     }
 }
 
-module.exports = { getJobs, getJobById };
+/**
+ * GET /api/jobs/keywords
+ * Get all unique search keywords for the filter dropdown.
+ */
+async function getKeywords(req, res) {
+    try {
+        const keywords = await Job.distinct('searchKeyword');
+        return res.json({
+            success: true,
+            data: keywords.sort()
+        });
+    } catch (error) {
+        console.error('Error fetching keywords:', error.message);
+        return res.status(500).json({
+            success: false,
+            message: 'Internal server error'
+        });
+    }
+}
+
+module.exports = { getJobs, getJobById, getKeywords };

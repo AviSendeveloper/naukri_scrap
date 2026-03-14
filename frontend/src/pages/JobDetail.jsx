@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import {
     HiOutlineArrowLeft,
@@ -10,19 +11,36 @@ import {
     HiOutlineExternalLink,
     HiOutlineTag
 } from 'react-icons/hi'
-import { mockJobs } from '../data/mockData'
+import { fetchJobById } from '../services/api'
+import Loader from '../components/Loader'
 
 export default function JobDetail() {
     const { id } = useParams()
     const navigate = useNavigate()
-    const job = mockJobs.find(j => j._id === id)
 
-    if (!job) {
+    const [job, setJob] = useState(null)
+    const [isLoading, setIsLoading] = useState(true)
+    const [error, setError] = useState(null)
+
+    useEffect(() => {
+        setIsLoading(true)
+        setError(null)
+        fetchJobById(id)
+            .then(res => setJob(res.data))
+            .catch(err => setError(err.message))
+            .finally(() => setIsLoading(false))
+    }, [id])
+
+    if (isLoading) {
+        return <Loader message="Loading job details..." />
+    }
+
+    if (error || !job) {
         return (
             <div className="empty-state">
                 <div className="empty-state-icon">🔍</div>
                 <h3>Job Not Found</h3>
-                <p>The job you're looking for doesn't exist.</p>
+                <p>{error || "The job you're looking for doesn't exist."}</p>
                 <button className="btn btn-primary" style={{ marginTop: '16px' }} onClick={() => navigate('/jobs')}>
                     Back to Jobs
                 </button>
@@ -83,8 +101,8 @@ export default function JobDetail() {
                         <div className="job-detail-section" style={{ marginBottom: 0 }}>
                             <h3>Key Skills</h3>
                             <div className="tags-list" style={{ gap: 'var(--space-3)' }}>
-                                {job.keySkills.map(skill => {
-                                    const isMatched = job.matchedSkills.some(
+                                {(job.keySkills || []).map(skill => {
+                                    const isMatched = (job.matchedSkills || []).some(
                                         ms => ms.toLowerCase() === skill.toLowerCase()
                                     )
                                     return (
@@ -98,7 +116,7 @@ export default function JobDetail() {
                                     )
                                 })}
                             </div>
-                            {job.matchedSkills.length > 0 && (
+                            {(job.matchedSkills || []).length > 0 && (
                                 <p style={{ marginTop: 'var(--space-4)', fontSize: 'var(--font-sm)', color: 'var(--accent-secondary)' }}>
                                     ✓ {job.matchedSkills.length} skills matched with your profile
                                 </p>
@@ -131,7 +149,7 @@ export default function JobDetail() {
                     </div>
 
                     {/* Industry Types */}
-                    {job.industryTypes.length > 0 && (
+                    {(job.industryTypes || []).length > 0 && (
                         <div className="card">
                             <h3 className="card-title" style={{ marginBottom: 'var(--space-4)' }}>Industry</h3>
                             <div className="tags-list" style={{ gap: 'var(--space-3)' }}>
