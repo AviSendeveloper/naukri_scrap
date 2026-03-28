@@ -1,0 +1,34 @@
+# ========================================
+# Dockerfile.worker - Background Worker Process
+# Runs BullMQ job match & filter workers
+# ========================================
+
+FROM node:20-alpine AS base
+
+WORKDIR /app
+
+# Install Chromium dependencies for Puppeteer
+RUN apk add --no-cache \
+    chromium \
+    nss \
+    freetype \
+    harfbuzz \
+    ca-certificates \
+    ttf-freefont
+
+# Tell Puppeteer to use the installed Chromium instead of downloading its own
+ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
+ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
+
+# Install dependencies first (leverages Docker layer caching)
+COPY package.json package-lock.json ./
+RUN npm ci --omit=dev
+
+# Copy application source
+COPY config.json ./
+COPY src/ ./src/
+
+# Workers don't expose any port — they connect to Redis and MongoDB only
+
+# Start the BullMQ worker process
+CMD ["node", "src/workers/index.js"]

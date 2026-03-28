@@ -1,0 +1,116 @@
+# ========================================
+# Docker Compose — NaukriScrap
+# ========================================
+# Services:
+#   api      — Backend Express API
+#   frontend — React/Vite frontend (nginx)
+#   redis    — Redis Stack (cache + BullMQ broker)
+#   worker   — BullMQ workers (4 replicas)
+#   db       — MongoDB (commented — using cloud Atlas)
+# ========================================
+
+services:
+  # ---- Backend API ----
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.api
+    container_name: naukri-api
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    env_file:
+      - ./backend/.env
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - REDIS_URL=redis://redis:6379
+      # MONGODB_URI comes from .env (cloud Atlas)
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - naukri-network
+
+  # ---- Frontend ----
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.frontend
+    container_name: naukri-frontend
+    restart: unless-stopped
+    ports:
+      - "5000:80"
+    depends_on:
+      - api
+    networks:
+      - naukri-network
+
+  # ---- Redis Stack ----
+  redis:
+    image: redis/redis-stack:latest
+    container_name: naukri-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"   # Redis server
+      - "8001:8001"   # RedisInsight UI
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - naukri-network
+
+  # ---- Worker (Job Match & Filter) ----
+  worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.worker
+    restart: unless-stopped
+    deploy:
+      replicas: 4
+    env_file:
+      - ./backend/.env
+    environment:
+      - NODE_ENV=production
+      - REDIS_URL=redis://redis:6379
+      # MONGODB_URI comes from .env (cloud Atlas)
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - naukri-network
+
+  # ---- MongoDB (commented — using cloud Atlas for now) ----
+  # db:
+  #   image: mongo:7
+  #   container_name: naukri-mongo
+  #   restart: unless-stopped
+  #   ports:
+  #     - "27017:27017"
+  #   environment:
+  #     MONGO_INITDB_ROOT_USERNAME: admin
+  #     MONGO_INITDB_ROOT_PASSWORD: admin_password
+  #     MONGO_INITDB_DATABASE: naukri_jobs
+  #   volumes:
+  #     - mongo-data:/data/db
+  #   healthcheck:
+  #     test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+  #     interval: 10s
+  #     timeout: 5s
+  #     retries: 5
+  #   networks:
+  #     - naukri-network
+
+networks:
+  naukri-network:
+    driver: bridge
+
+volumes:
+  redis-data:
+    driver: local
+  # mongo-data:
+  #   driver: local

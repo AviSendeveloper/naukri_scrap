@@ -1,0 +1,26 @@
+# ========================================
+# Dockerfile.api - Backend Web Application
+# Runs the Express REST API server
+# ========================================
+
+FROM node:20-alpine AS base
+
+WORKDIR /app
+
+# Install dependencies first (leverages Docker layer caching)
+COPY package.json package-lock.json ./
+RUN npm ci --omit=dev
+
+# Copy application source
+COPY config.json ./
+COPY src/ ./src/
+
+# Expose API port
+EXPOSE 3000
+
+# Health check for the API server
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+    CMD wget --no-verbose --tries=1 --spider http://localhost:3000/api/jobs || exit 1
+
+# Start the Express API server
+CMD ["node", "src/index.js"]
