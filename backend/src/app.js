@@ -1,6 +1,11 @@
 const express = require('express');
 const cors = require('cors');
+
+// Route modules
 const jobRoutes = require('./routes/jobRoutes');
+const dashboardRoutes = require('./routes/dashboardRoutes');
+const analyticsRoutes = require('./routes/analyticsRoutes');
+const configRoutes = require('./routes/configRoutes');
 
 const app = express();
 
@@ -10,6 +15,9 @@ app.use(express.json());
 
 // Routes
 app.use('/api/jobs', jobRoutes);
+app.use('/api/dashboard', dashboardRoutes);
+app.use('/api/analytics', analyticsRoutes);
+app.use('/api/config', configRoutes);
 
 // Health check
 app.get('/health', (_req, res) => {

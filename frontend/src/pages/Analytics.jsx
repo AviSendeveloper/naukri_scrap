@@ -1,12 +1,15 @@
+import { useState, useEffect } from 'react'
 import {
     HiOutlineBriefcase,
     HiOutlineOfficeBuilding,
     HiOutlineLocationMarker,
     HiOutlineChip
 } from 'react-icons/hi'
-import { jobsByKeyword, topCompanies, topSkills, jobsByLocation, jobsByIndustry, mockJobs } from '../data/mockData'
+import { fetchAnalytics } from '../services/api'
+import Loader from '../components/Loader'
 
 function BarChart({ data, labelKey, valueKey, colorRotation = ['primary', 'secondary', 'warning', 'info'] }) {
+    if (!data || data.length === 0) return <p style={{ color: 'var(--text-muted)', fontSize: 'var(--font-sm)' }}>No data available.</p>
     const maxVal = Math.max(...data.map(d => d[valueKey]))
     return (
         <div className="bar-chart">
@@ -29,6 +32,7 @@ function BarChart({ data, labelKey, valueKey, colorRotation = ['primary', 'secon
 }
 
 function DonutChart({ data, labelKey, valueKey, colors }) {
+    if (!data || data.length === 0) return <p style={{ color: 'var(--text-muted)', fontSize: 'var(--font-sm)' }}>No data available.</p>
     const total = data.reduce((sum, d) => sum + d[valueKey], 0)
     let cumulativePercent = 0
 
@@ -80,20 +84,25 @@ function DonutChart({ data, labelKey, valueKey, colors }) {
 }
 
 export default function Analytics() {
-    const salaryRanges = (() => {
-        const ranges = { 'Not disclosed': 0, '< ₹10 LPA': 0, '₹10-20 LPA': 0, '₹20-30 LPA': 0, '₹30+ LPA': 0 }
-        mockJobs.forEach(j => {
-            if (j.salary === 'Not disclosed') { ranges['Not disclosed']++; return }
-            const match = j.salary.match(/₹(\d+)/)
-            if (!match) return
-            const min = parseInt(match[1])
-            if (min < 10) ranges['< ₹10 LPA']++
-            else if (min < 20) ranges['₹10-20 LPA']++
-            else if (min < 30) ranges['₹20-30 LPA']++
-            else ranges['₹30+ LPA']++
-        })
-        return Object.entries(ranges).map(([range, count]) => ({ range, count })).filter(r => r.count > 0)
-    })()
+    const [data, setData] = useState(null)
+    const [isLoading, setIsLoading] = useState(true)
+
+    useEffect(() => {
+        fetchAnalytics()
+            .then(res => setData(res.data))
+            .catch(err => console.error('Analytics fetch error:', err))
+            .finally(() => setIsLoading(false))
+    }, [])
+
+    if (isLoading) return <Loader message="Loading analytics..." />
+
+    const totalJobs = data?.totalJobs || 0
+    const jobsByKeyword = data?.jobsByKeyword || []
+    const jobsByLocation = data?.jobsByLocation || []
+    const topCompanies = data?.topCompanies || []
+    const topSkills = data?.topSkills || []
+    const salaryDistribution = data?.salaryDistribution || []
+    const jobsByIndustry = data?.jobsByIndustry || []
 
     const donutColors = ['#6366f1', '#10b981', '#f59e0b', '#3b82f6', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6']
 
@@ -102,7 +111,7 @@ export default function Analytics() {
             <div className="page-header">
                 <div>
                     <h2>Analytics</h2>
-                    <p>Insights from {mockJobs.length} scraped jobs</p>
+                    <p>Insights from {totalJobs} scraped jobs</p>
                 </div>
             </div>
 
@@ -162,7 +171,7 @@ export default function Analytics() {
                             <p className="card-subtitle">Salary ranges across listings</p>
                         </div>
                     </div>
-                    <BarChart data={salaryRanges} labelKey="range" valueKey="count" colorRotation={['warning', 'secondary', 'primary', 'info']} />
+                    <BarChart data={salaryDistribution} labelKey="range" valueKey="count" colorRotation={['warning', 'secondary', 'primary', 'info']} />
                 </div>
 
                 {/* Industry Types */}

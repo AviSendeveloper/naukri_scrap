@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import {
     HiOutlineKey,
     HiOutlineChip,
@@ -8,13 +8,22 @@ import {
     HiOutlinePlus,
     HiOutlineX
 } from 'react-icons/hi'
-import { mockConfig } from '../data/mockData'
+import { fetchConfig, updateConfig } from '../services/api'
+import Loader from '../components/Loader'
 
 export default function Settings() {
-    const [config, setConfig] = useState(mockConfig)
+    const [config, setConfig] = useState(null)
+    const [isLoading, setIsLoading] = useState(true)
     const [newKeyword, setNewKeyword] = useState('')
     const [newSkill, setNewSkill] = useState('')
-    const [saved, setSaved] = useState(false)
+    const [saveStatus, setSaveStatus] = useState('idle') // idle | saving | saved | error
+
+    useEffect(() => {
+        fetchConfig()
+            .then(res => setConfig(res.data))
+            .catch(err => console.error('Config fetch error:', err))
+            .finally(() => setIsLoading(false))
+    }, [])
 
     const addKeyword = () => {
         if (newKeyword.trim() && !config.keywords.includes(newKeyword.trim())) {
@@ -38,9 +47,40 @@ export default function Settings() {
         setConfig(prev => ({ ...prev, skills: prev.skills.filter(s => s !== skill) }))
     }
 
-    const handleSave = () => {
-        setSaved(true)
-        setTimeout(() => setSaved(false), 2000)
+    const handleSave = async () => {
+        setSaveStatus('saving')
+        try {
+            const res = await updateConfig(config)
+            setConfig(res.data)
+            setSaveStatus('saved')
+            setTimeout(() => setSaveStatus('idle'), 2000)
+        } catch (err) {
+            console.error('Save error:', err)
+            setSaveStatus('error')
+            setTimeout(() => setSaveStatus('idle'), 3000)
+        }
+    }
+
+    if (isLoading) return <Loader message="Loading settings..." />
+
+    if (!config) {
+        return (
+            <div className="animate-in">
+                <div className="page-header">
+                    <div>
+                        <h2>Settings</h2>
+                        <p>Could not load configuration.</p>
+                    </div>
+                </div>
+            </div>
+        )
+    }
+
+    const saveLabel = {
+        idle: 'Save Changes',
+        saving: 'Saving...',
+        saved: 'Saved ✓',
+        error: 'Error ✗',
     }
 
     return (
@@ -50,8 +90,12 @@ export default function Settings() {
                     <h2>Settings</h2>
                     <p>Manage scraping configuration</p>
                 </div>
-                <button className="btn btn-primary" onClick={handleSave}>
-                    <HiOutlineSave /> {saved ? 'Saved ✓' : 'Save Changes'}
+                <button
+                    className={`btn ${saveStatus === 'error' ? 'btn-outline' : 'btn-primary'}`}
+                    onClick={handleSave}
+                    disabled={saveStatus === 'saving'}
+                >
+                    <HiOutlineSave /> {saveLabel[saveStatus]}
                 </button>
             </div>
 
@@ -136,7 +180,7 @@ export default function Settings() {
                                 type="number"
                                 min="0"
                                 max="30"
-                                value={config.experience.min}
+                                value={config.experience?.min ?? 0}
                                 onChange={e => setConfig(prev => ({
                                     ...prev,
                                     experience: { ...prev.experience, min: parseInt(e.target.value) || 0 }
@@ -150,7 +194,7 @@ export default function Settings() {
                                 type="number"
                                 min="0"
                                 max="30"
-                                value={config.experience.max}
+                                value={config.experience?.max ?? 5}
                                 onChange={e => setConfig(prev => ({
                                     ...prev,
                                     experience: { ...prev.experience, max: parseInt(e.target.value) || 0 }
@@ -166,7 +210,7 @@ export default function Settings() {
                         fontSize: 'var(--font-sm)',
                         color: 'var(--accent-info)'
                     }}>
-                        Currently filtering: {config.experience.min}–{config.experience.max} years
+                        Currently filtering: {config.experience?.min ?? 0}–{config.experience?.max ?? 5} years
                     </div>
                 </div>
 
@@ -183,7 +227,7 @@ export default function Settings() {
                             type="number"
                             min="1"
                             max="20"
-                            value={config.scraping.pagesPerKeyword}
+                            value={config.scraping?.pagesPerKeyword ?? 3}
                             onChange={e => setConfig(prev => ({
                                 ...prev,
                                 scraping: { ...prev.scraping, pagesPerKeyword: parseInt(e.target.value) || 1 }
@@ -198,7 +242,7 @@ export default function Settings() {
                             min="1000"
                             max="30000"
                             step="1000"
-                            value={config.scraping.delayBetweenKeywords}
+                            value={config.scraping?.delayBetweenKeywords ?? 5000}
                             onChange={e => setConfig(prev => ({
                                 ...prev,
                                 scraping: { ...prev.scraping, delayBetweenKeywords: parseInt(e.target.value) || 5000 }
@@ -215,7 +259,7 @@ export default function Settings() {
                         }}>
                             <input
                                 type="checkbox"
-                                checked={config.scraping.scrapeJobDetails}
+                                checked={config.scraping?.scrapeJobDetails ?? true}
                                 onChange={e => setConfig(prev => ({
                                     ...prev,
                                     scraping: { ...prev.scraping, scrapeJobDetails: e.target.checked }
@@ -225,14 +269,14 @@ export default function Settings() {
                             <span style={{
                                 position: 'absolute',
                                 inset: 0,
-                                background: config.scraping.scrapeJobDetails ? 'var(--accent-primary)' : 'var(--bg-surface-active)',
+                                background: (config.scraping?.scrapeJobDetails ?? true) ? 'var(--accent-primary)' : 'var(--bg-surface-active)',
                                 borderRadius: 'var(--radius-full)',
                                 transition: 'background var(--transition-fast)',
                             }}>
                                 <span style={{
                                     position: 'absolute',
                                     top: '3px',
-                                    left: config.scraping.scrapeJobDetails ? '23px' : '3px',
+                                    left: (config.scraping?.scrapeJobDetails ?? true) ? '23px' : '3px',
                                     width: '18px',
                                     height: '18px',
                                     background: 'white',

@@ -39,3 +39,48 @@ export async function fetchKeywords() {
     if (!res.ok) throw new Error('Failed to fetch keywords');
     return res.json();
 }
+
+/**
+ * Fetch dashboard data (stats, recent jobs, charts).
+ * @returns {Promise<{ data: Object }>}
+ */
+export async function fetchDashboard() {
+    const res = await fetch(`${API_BASE}/dashboard`);
+    if (!res.ok) throw new Error('Failed to fetch dashboard data');
+    return res.json();
+}
+
+/**
+ * Fetch analytics data (all chart aggregations).
+ * @returns {Promise<{ data: Object }>}
+ */
+export async function fetchAnalytics() {
+    const res = await fetch(`${API_BASE}/analytics`);
+    if (!res.ok) throw new Error('Failed to fetch analytics data');
+    return res.json();
+}
+
+/**
+ * Fetch current scraper configuration.
+ * @returns {Promise<{ data: Object }>}
+ */
+export async function fetchConfig() {
+    const res = await fetch(`${API_BASE}/config`);
+    if (!res.ok) throw new Error('Failed to fetch config');
+    return res.json();
+}
+
+/**
+ * Update scraper configuration.
+ * @param {Object} config - { keywords, skills, experience, scraping }
+ * @returns {Promise<{ data: Object }>}
+ */
+export async function updateConfig(config) {
+    const res = await fetch(`${API_BASE}/config`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(config),
+    });
+    if (!res.ok) throw new Error('Failed to update config');
+    return res.json();
+}

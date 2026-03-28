@@ -2,40 +2,28 @@
 
 require('dotenv').config({ quiet: true });
 
-const fs = require('fs');
-const path = require('path');
 const { program } = require('commander');
 const chalk = require('chalk');
 const { connectDB, closeDB } = require('./config/database');
 const Job = require('./models/Job');
 const NaukriScraper = require('./scraper/naukriScraper');
 const { createJobQueue } = require('./config/queue');
+const configService = require('./services/configService');
 
 // Package info
 const packageInfo = require('../package.json');
 
-// Config file path
-const CONFIG_PATH = path.join(__dirname, '..', 'config.json');
-
 /**
- * Load configuration from config.json
- * @returns {Object} Configuration object
+ * Load configuration from DB first, then config.json fallback.
+ * @returns {Promise<Object>} Configuration object
  */
-function loadConfig() {
+async function loadConfig() {
     try {
-        if (fs.existsSync(CONFIG_PATH)) {
-            const configData = fs.readFileSync(CONFIG_PATH, 'utf8');
-            return JSON.parse(configData);
-        }
+        return await configService.getConfig();
     } catch (error) {
-        console.error(chalk.red(`Error loading config.json: ${error.message}`));
+        console.error(chalk.yellow(`⚠️ Could not load config from DB, using file fallback: ${error.message}`));
+        return configService.loadFileConfig();
     }
-    return {
-        keywords: [],
-        skills: [],
-        experience: null,
-        scraping: { pagesPerKeyword: 3, delayBetweenKeywords: 5000, scrapeJobDetails: true }
-    };
 }
 
 /**
@@ -122,7 +110,7 @@ async function scrapeAndDispatch(scraper, keyword, pages, config = {}, jobQueue)
  * @param {boolean} withLogin - Whether to login first
  */
 async function runSingleScrape(keyword, pages, withLogin = false) {
-    const config = loadConfig();
+    const config = await loadConfig();
     const scraper = new NaukriScraper();
     const jobQueue = createJobQueue();
 
@@ -158,7 +146,7 @@ async function runSingleScrape(keyword, pages, withLogin = false) {
  * Run scraper for all keywords from config file
  */
 async function runFromConfig() {
-    const config = loadConfig();
+    const config = await loadConfig();
     const keywords = config.keywords || [];
     const skills = config.skills || [];
     const experience = config.experience || null;
