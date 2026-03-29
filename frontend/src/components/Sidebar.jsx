@@ -5,7 +5,8 @@ import {
     HiOutlineChartBar,
     HiOutlineCog,
     HiOutlineSearch,
-    HiOutlineLightningBolt
+    HiOutlineLightningBolt,
+    HiOutlineDocumentText
 } from 'react-icons/hi'
 
 const navItems = [
@@ -15,6 +16,7 @@ const navItems = [
             { to: '/', icon: HiOutlineViewGrid, label: 'Dashboard' },
             { to: '/jobs', icon: HiOutlineBriefcase, label: 'Jobs' },
             { to: '/analytics', icon: HiOutlineChartBar, label: 'Analytics' },
+            { to: '/resume', icon: HiOutlineDocumentText, label: 'Resume' },
         ]
     },
     {

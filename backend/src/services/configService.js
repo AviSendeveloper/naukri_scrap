@@ -40,6 +40,7 @@ async function getConfig() {
                 skills: dbConfig.skills || [],
                 experience: dbConfig.experience || { min: 0, max: 5 },
                 scraping: dbConfig.scraping || { pagesPerKeyword: 3, delayBetweenKeywords: 5000, scrapeJobDetails: true },
+                resumeScheduleTime: dbConfig.resumeScheduleTime || '09:00',
             };
         }
     } catch (err) {
@@ -61,6 +62,7 @@ async function updateConfig(data) {
         skills: updated.skills,
         experience: updated.experience,
         scraping: updated.scraping,
+        resumeScheduleTime: updated.resumeScheduleTime || '09:00',
     };
 }
 

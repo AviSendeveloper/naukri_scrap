@@ -33,6 +33,13 @@ const scraperConfigSchema = new mongoose.Schema({
         delayBetweenKeywords: { type: Number, default: 5000, min: 1000, max: 30000 },
         scrapeJobDetails: { type: Boolean, default: true },
     },
+
+    // Resume scheduler time (HH:mm format, 24hr)
+    resumeScheduleTime: {
+        type: String,
+        default: '09:00',
+        trim: true,
+    },
 }, {
     timestamps: true,
 });
@@ -62,6 +69,7 @@ scraperConfigSchema.statics.upsertConfig = async function (data) {
     if (data.skills !== undefined) update.skills = data.skills;
     if (data.experience !== undefined) update.experience = data.experience;
     if (data.scraping !== undefined) update.scraping = data.scraping;
+    if (data.resumeScheduleTime !== undefined) update.resumeScheduleTime = data.resumeScheduleTime;
 
     const config = await this.findOneAndUpdate(
         { configId: 'default' },

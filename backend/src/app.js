@@ -6,6 +6,7 @@ const jobRoutes = require('./routes/jobRoutes');
 const dashboardRoutes = require('./routes/dashboardRoutes');
 const analyticsRoutes = require('./routes/analyticsRoutes');
 const configRoutes = require('./routes/configRoutes');
+const resumeRoutes = require('./routes/resumeRoutes');
 
 const app = express();
 
@@ -18,6 +19,7 @@ app.use('/api/jobs', jobRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/config', configRoutes);
+app.use('/api/resumes', resumeRoutes);
 
 // Health check
 app.get('/health', (_req, res) => {

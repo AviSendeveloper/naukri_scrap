@@ -287,6 +287,35 @@ export default function Settings() {
                         </label>
                     </div>
                 </div>
+
+                {/* Resume Scheduler */}
+                <div className="settings-card animate-in animate-in-delay-4">
+                    <h3><HiOutlineClock /> Resume Scheduler</h3>
+                    <p style={{ fontSize: 'var(--font-sm)', color: 'var(--text-muted)', marginBottom: 'var(--space-4)' }}>
+                        Configure daily resume upload to Naukri.com
+                    </p>
+                    <div className="form-group">
+                        <label className="form-label">Daily upload time (24hr format)</label>
+                        <input
+                            className="form-input"
+                            type="time"
+                            value={config.resumeScheduleTime ?? '09:00'}
+                            onChange={e => setConfig(prev => ({
+                                ...prev,
+                                resumeScheduleTime: e.target.value
+                            }))}
+                        />
+                    </div>
+                    <div style={{
+                        padding: 'var(--space-3)',
+                        background: 'var(--accent-info-muted)',
+                        borderRadius: 'var(--radius-md)',
+                        fontSize: 'var(--font-sm)',
+                        color: 'var(--accent-info)'
+                    }}>
+                        Resume will be uploaded daily at {config.resumeScheduleTime ?? '09:00'} IST
+                    </div>
+                </div>
             </div>
         </div>
     )

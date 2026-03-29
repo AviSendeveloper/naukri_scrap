@@ -84,3 +84,82 @@ export async function updateConfig(config) {
     if (!res.ok) throw new Error('Failed to update config');
     return res.json();
 }
+
+// ─── Resume API ──────────────────────────────────────────────
+
+/**
+ * Upload a resume file (multipart/form-data).
+ * @param {FormData} formData - FormData with 'resume' field
+ * @returns {Promise<{ data: Object }>}
+ */
+export async function uploadResume(formData) {
+    const res = await fetch(`${API_BASE}/resumes/upload`, {
+        method: 'POST',
+        body: formData,
+    });
+    if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.message || 'Failed to upload resume');
+    }
+    return res.json();
+}
+
+/**
+ * Fetch all uploaded resumes with schedule info.
+ * @returns {Promise<{ data: Object }>}
+ */
+export async function fetchResumes() {
+    const res = await fetch(`${API_BASE}/resumes`);
+    if (!res.ok) throw new Error('Failed to fetch resumes');
+    return res.json();
+}
+
+/**
+ * Delete a resume by ID.
+ * @param {string} id
+ * @returns {Promise<{ data: Object }>}
+ */
+export async function deleteResume(id) {
+    const res = await fetch(`${API_BASE}/resumes/${id}`, {
+        method: 'DELETE',
+    });
+    if (!res.ok) throw new Error('Failed to delete resume');
+    return res.json();
+}
+
+/**
+ * Select a resume for the daily upload scheduler.
+ * @param {string} id
+ * @returns {Promise<{ data: Object }>}
+ */
+export async function selectResumeForSchedule(id) {
+    const res = await fetch(`${API_BASE}/resumes/${id}/select`, {
+        method: 'POST',
+    });
+    if (!res.ok) throw new Error('Failed to select resume for schedule');
+    return res.json();
+}
+
+/**
+ * Fetch current schedule details.
+ * @returns {Promise<{ data: Object|null }>}
+ */
+export async function fetchResumeSchedule() {
+    const res = await fetch(`${API_BASE}/resumes/schedule`);
+    if (!res.ok) throw new Error('Failed to fetch schedule details');
+    return res.json();
+}
+
+/**
+ * Fetch paginated scheduler run logs.
+ * @param {number} page
+ * @param {number} limit
+ * @returns {Promise<{ data: Array, pagination: Object }>}
+ */
+export async function fetchSchedulerLogs(page = 1, limit = 10) {
+    const params = new URLSearchParams({ page, limit });
+    const res = await fetch(`${API_BASE}/resumes/schedule/logs?${params}`);
+    if (!res.ok) throw new Error('Failed to fetch scheduler logs');
+    return res.json();
+}
+

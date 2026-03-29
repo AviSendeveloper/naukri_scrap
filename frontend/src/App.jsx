@@ -5,6 +5,7 @@ import Jobs from './pages/Jobs'
 import JobDetail from './pages/JobDetail'
 import Analytics from './pages/Analytics'
 import Settings from './pages/Settings'
+import Resume from './pages/Resume'
 
 export default function App() {
     return (
@@ -14,8 +15,10 @@ export default function App() {
                 <Route path="/jobs" element={<Jobs />} />
                 <Route path="/jobs/:id" element={<JobDetail />} />
                 <Route path="/analytics" element={<Analytics />} />
+                <Route path="/resume" element={<Resume />} />
                 <Route path="/settings" element={<Settings />} />
             </Route>
         </Routes>
     )
 }
+

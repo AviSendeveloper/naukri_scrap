@@ -20,7 +20,7 @@ async function getConfig(req, res) {
  */
 async function updateConfig(req, res) {
     try {
-        const { keywords, skills, experience, scraping } = req.body;
+        const { keywords, skills, experience, scraping, resumeScheduleTime } = req.body;
 
         // Basic validation
         if (keywords !== undefined && !Array.isArray(keywords)) {
@@ -30,7 +30,18 @@ async function updateConfig(req, res) {
             return res.status(400).json({ success: false, message: 'skills must be an array' });
         }
 
-        const updated = await configService.updateConfig({ keywords, skills, experience, scraping });
+        const updated = await configService.updateConfig({ keywords, skills, experience, scraping, resumeScheduleTime });
+
+        // If scheduler time changed, reschedule the cron job
+        if (resumeScheduleTime !== undefined) {
+            try {
+                const { reschedule } = require('../scheduler/resumeScheduler');
+                reschedule(resumeScheduleTime);
+            } catch (err) {
+                console.error('Error rescheduling resume upload:', err.message);
+            }
+        }
+
         return res.json({ success: true, data: updated });
     } catch (error) {
         console.error('Error updating config:', error.message);
