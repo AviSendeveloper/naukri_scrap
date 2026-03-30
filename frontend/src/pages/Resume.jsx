@@ -67,6 +67,7 @@ export default function Resume() {
     const [selectedFile, setSelectedFile] = useState(null)
     const [isScheduleSelect, setIsScheduleSelect] = useState(false)
     const [actionLoading, setActionLoading] = useState(null)
+    const [isUploadingNaukri, setIsUploadingNaukri] = useState(false)
     const fileInputRef = useRef(null)
 
     // Load initial data
@@ -193,15 +194,15 @@ export default function Resume() {
     }
 
     async function handleUploadInNaukri() {
-        console.log("isScheduleSelect", isScheduleSelect);
+        if (!isScheduleSelect || isUploadingNaukri) return
         
-        if (!isScheduleSelect) return
+        setIsUploadingNaukri(true)
         try {
             await uploadResumeInNaukri()
         } catch (err) {
-            
+            console.error('Naukri upload error:', err)
         } finally {
-            
+            setIsUploadingNaukri(false)
         }
     }
 
@@ -238,12 +239,26 @@ export default function Resume() {
                     <h2>Resume Manager</h2>
                     <p>Upload and manage resumes for Naukri profile updates</p>
                 </div>
-                <button className="btn btn-primary" onClick={() => handleUploadInNaukri()}>
-                    <HiOutlineDocumentAdd /> Upload Resume in Naukri
-                </button>
-                <button className="btn btn-primary" onClick={() => setShowModal(true)}>
-                    <HiOutlineDocumentAdd /> Add Resume
-                </button>
+                <div className="page-header-actions">
+                    <button 
+                        className="btn btn-primary" 
+                        onClick={() => handleUploadInNaukri()}
+                        disabled={isUploadingNaukri}
+                    >
+                        {isUploadingNaukri ? (
+                            <>
+                                <HiOutlineRefresh className="animate-spin" /> Uploading to Naukri...
+                            </>
+                        ) : (
+                            <>
+                                <HiOutlineDocumentAdd /> Upload Resume in Naukri
+                            </>
+                        )}
+                    </button>
+                    <button className="btn btn-primary" onClick={() => setShowModal(true)}>
+                        <HiOutlineDocumentAdd /> Add Resume
+                    </button>
+                </div>
             </div>
 
             {/* Schedule Info Banner */}
