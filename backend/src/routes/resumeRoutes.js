@@ -8,6 +8,7 @@ const {
     selectForSchedule,
     getScheduleDetails,
     getSchedulerLogs,
+    uploadResumeInNaukri
 } = require('../controllers/resumeController');
 
 // GET /api/resumes/schedule — must be before /:id routes
@@ -24,6 +25,9 @@ router.post('/upload', upload.single('resume'), (req, res, next) => {
     }
     next();
 }, uploadResume);
+
+// GET /api/resumes/upload-in-naukri
+router.get('/upload-in-naukri', uploadResumeInNaukri);
 
 // GET /api/resumes
 router.get('/', listResumes);

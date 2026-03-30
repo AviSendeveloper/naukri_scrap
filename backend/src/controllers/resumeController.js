@@ -1,4 +1,5 @@
 const resumeService = require('../services/resumeService');
+const {executeUpload} = require('../resume/upload');
 
 /**
  * POST /api/resumes/upload
@@ -103,6 +104,21 @@ async function getSchedulerLogs(req, res) {
     }
 }
 
+/**
+ * GET /api/resumes/upload-in-naukri
+ * Upload a resume to Naukri.
+ */
+async function uploadResumeInNaukri(req, res) {
+    try {
+        // upload resume in naukri using executeUpload function (fetch db config + scrap naukri upload)
+        await executeUpload();
+        return res.json({ success: true });
+    } catch (error) {
+        console.error('Error uploading resume to Naukri:', error.message);
+        return res.status(500).json({ success: false, message: 'Internal server error' });
+    }
+}
+
 module.exports = {
     uploadResume,
     listResumes,
@@ -110,4 +126,5 @@ module.exports = {
     selectForSchedule,
     getScheduleDetails,
     getSchedulerLogs,
+    uploadResumeInNaukri,
 };

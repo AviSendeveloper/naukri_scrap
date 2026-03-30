@@ -21,6 +21,7 @@ import {
     selectResumeForSchedule,
     fetchResumeSchedule,
     fetchSchedulerLogs,
+    uploadResumeInNaukri
 } from '../services/api'
 import Loader from '../components/Loader'
 
@@ -64,6 +65,7 @@ export default function Resume() {
     const [uploadError, setUploadError] = useState('')
     const [dragOver, setDragOver] = useState(false)
     const [selectedFile, setSelectedFile] = useState(null)
+    const [isScheduleSelect, setIsScheduleSelect] = useState(false)
     const [actionLoading, setActionLoading] = useState(null)
     const fileInputRef = useRef(null)
 
@@ -82,6 +84,10 @@ export default function Resume() {
             setResumes(resumeRes.data?.resumes || [])
             setSchedule(resumeRes.data?.schedule || null)
             setScheduleDetails(scheduleRes.data || null)
+
+            if (scheduleRes.data?.resumeId) {
+                setIsScheduleSelect(true)
+            }
         } catch (err) {
             console.error('Error loading resume data:', err)
         } finally {
@@ -186,6 +192,19 @@ export default function Resume() {
         }
     }
 
+    async function handleUploadInNaukri() {
+        console.log("isScheduleSelect", isScheduleSelect);
+        
+        if (!isScheduleSelect) return
+        try {
+            await uploadResumeInNaukri()
+        } catch (err) {
+            
+        } finally {
+            
+        }
+    }
+
     // Drag and drop handlers
     function handleDragOver(e) {
         e.preventDefault()
@@ -219,6 +238,9 @@ export default function Resume() {
                     <h2>Resume Manager</h2>
                     <p>Upload and manage resumes for Naukri profile updates</p>
                 </div>
+                <button className="btn btn-primary" onClick={() => handleUploadInNaukri()}>
+                    <HiOutlineDocumentAdd /> Upload Resume in Naukri
+                </button>
                 <button className="btn btn-primary" onClick={() => setShowModal(true)}>
                     <HiOutlineDocumentAdd /> Add Resume
                 </button>

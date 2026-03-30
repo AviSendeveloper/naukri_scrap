@@ -142,6 +142,15 @@ async function getSchedulerLogs(page = 1, limit = 10) {
     };
 }
 
+/**
+ * Upload a resume to Naukri.
+ * @returns {Promise<Object>} - Result of the upload operation
+ */
+async function uploadResumeInNaukri() {
+    // TODO: Implement resume upload to Naukri
+    return { message: 'Resume upload to Naukri not implemented yet' };
+}
+
 module.exports = {
     uploadResume,
     listResumes,

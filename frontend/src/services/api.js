@@ -105,6 +105,22 @@ export async function uploadResume(formData) {
 }
 
 /**
+ * Upload a resume file (multipart/form-data).
+ * @param {FormData} formData - FormData with 'resume' field
+ * @returns {Promise<{ data: Object }>}
+ */
+export async function uploadResumeInNaukri() {
+    const res = await fetch(`${API_BASE}/resumes/upload-in-naukri`, {
+        method: 'GET',
+    });
+    if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.message || 'Failed to upload resume');
+    }
+    return res.json();
+}
+
+/**
  * Fetch all uploaded resumes with schedule info.
  * @returns {Promise<{ data: Object }>}
  */
