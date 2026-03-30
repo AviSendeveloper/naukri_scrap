@@ -10,8 +10,28 @@ const resumeRoutes = require('./routes/resumeRoutes');
 
 const app = express();
 
+// cors
+const allowedOrigins = process.env.CORS_ORIGINS
+? process.env.CORS_ORIGINS.split(',')
+: [];
+
+app.use(
+    cors({
+        origin: function (origin, callback) {
+            // allow requests with no origin (like mobile apps, curl, Postman)
+            if (!origin) return callback(null, true);
+            
+            if (allowedOrigins.includes(origin)) {
+                return callback(null, true);
+            } else {
+                return callback(new Error('Not allowed by CORS'));
+            }
+        },
+        credentials: true, // if using cookies/auth
+    })
+);
+
 // Middlewares
-app.use(cors());
 app.use(express.json());
 
 // Routes
