@@ -1,5 +1,6 @@
 const resumeService = require('../services/resumeService');
-const {executeUpload} = require('../resume/upload');
+const { executeUpload } = require('../resume/upload');
+const { S3Client, PutObjectCommand } = require("@aws-sdk/client-s3");
 
 /**
  * POST /api/resumes/upload
@@ -11,7 +12,31 @@ async function uploadResume(req, res) {
             return res.status(400).json({ success: false, message: 'No file uploaded' });
         }
 
-        const resume = await resumeService.uploadResume(req.file);
+        const s3BucketName = process.env.S3_BUCKET_NAME
+        const s3BucketRegion = process.env.S3_BUCKET_REGION
+        const s3AccessKey = process.env.S3_ACCESS_KEY
+        const s3SecretKey = process.env.S3_SECRET_KEY
+
+        const s3Client = new S3Client({
+            region: s3BucketRegion,
+            credentials: {
+                accessKeyId: s3AccessKey,
+                secretAccessKey: s3SecretKey
+            }
+        })
+
+        const command = new PutObjectCommand({
+            Bucket: s3BucketName,
+            Key: req.file.originalname,
+            Body: req.file.buffer,
+            ContentType: req.file.mimetype,
+        });
+
+        const s3Response = await s3Client.send(command);
+
+
+        // const resume = await resumeService.uploadResume(req.file);
+        const resume = {};
         return res.status(201).json({ success: true, data: resume });
     } catch (error) {
         console.error('Error uploading resume:', error.message);

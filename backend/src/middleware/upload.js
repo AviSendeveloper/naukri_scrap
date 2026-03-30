@@ -25,16 +25,17 @@ const ALLOWED_EXTENSIONS = ['.pdf', '.doc', '.docx', '.rtf'];
 const MAX_FILE_SIZE = 2 * 1024 * 1024;
 
 // Multer disk storage configuration
-const storage = multer.diskStorage({
-    destination: (_req, _file, cb) => {
-        cb(null, UPLOAD_DIR);
-    },
-    filename: (_req, file, cb) => {
-        const ext = path.extname(file.originalname).toLowerCase();
-        const uniqueName = `${uuidv4()}${ext}`;
-        cb(null, uniqueName);
-    }
-});
+// const storage = multer.diskStorage({
+//     destination: (_req, _file, cb) => {
+//         cb(null, UPLOAD_DIR);
+//     },
+//     filename: (_req, file, cb) => {
+//         const ext = path.extname(file.originalname).toLowerCase();
+//         const uniqueName = `${uuidv4()}${ext}`;
+//         cb(null, uniqueName);
+//     }
+// });
+const storage = multer.memoryStorage();
 
 // File filter for validation
 const fileFilter = (_req, file, cb) => {
