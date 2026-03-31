@@ -1,6 +1,19 @@
 const resumeService = require('../services/resumeService');
 const { executeUpload } = require('../resume/upload');
-const { S3Client, PutObjectCommand } = require("@aws-sdk/client-s3");
+const { S3Client, PutObjectCommand, GetObjectCommand } = require("@aws-sdk/client-s3");
+const path = require('path');
+const { v4: uuidv4 } = require('uuid');
+const fs = require('fs');
+const S3Bucket = require('../utils/S3Bucket');
+
+const readFile = (path) => {
+    return new Promise((resolve, reject) => {
+        fs.readFile(path, (err, data) => {
+            if (err) reject(err);
+            resolve(data);
+        })
+    })
+}
 
 /**
  * POST /api/resumes/upload
@@ -12,31 +25,15 @@ async function uploadResume(req, res) {
             return res.status(400).json({ success: false, message: 'No file uploaded' });
         }
 
-        const s3BucketName = process.env.S3_BUCKET_NAME
-        const s3BucketRegion = process.env.S3_BUCKET_REGION
-        const s3AccessKey = process.env.S3_ACCESS_KEY
-        const s3SecretKey = process.env.S3_SECRET_KEY
+        const originalFilename = req.file.originalname.toLowerCase()
+        const filename = `${uuidv4()}_${originalFilename}`;
+        req.file.filename = filename;
 
-        const s3Client = new S3Client({
-            region: s3BucketRegion,
-            credentials: {
-                accessKeyId: s3AccessKey,
-                secretAccessKey: s3SecretKey
-            }
-        })
+        const s3Bucket = new S3Bucket();
+        await s3Bucket.uploadFile(filename, req.file.buffer, req.file.mimetype);
 
-        const command = new PutObjectCommand({
-            Bucket: s3BucketName,
-            Key: req.file.originalname,
-            Body: req.file.buffer,
-            ContentType: req.file.mimetype,
-        });
+        const resume = await resumeService.uploadResume(req.file);
 
-        const s3Response = await s3Client.send(command);
-
-
-        // const resume = await resumeService.uploadResume(req.file);
-        const resume = {};
         return res.status(201).json({ success: true, data: resume });
     } catch (error) {
         console.error('Error uploading resume:', error.message);

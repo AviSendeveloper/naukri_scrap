@@ -6,12 +6,7 @@ const resumeSchema = new mongoose.Schema({
         required: true,
         trim: true
     },
-    fileName: {
-        type: String,
-        required: true,
-        trim: true
-    },
-    filePath: {
+    uniqueFileName: {
         type: String,
         required: true,
         trim: true

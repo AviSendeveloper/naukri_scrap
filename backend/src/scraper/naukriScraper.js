@@ -1,4 +1,5 @@
 const puppeteer = require('puppeteer');
+const S3Bucket = require('../utils/S3Bucket');
 
 // List of user agents for rotation
 const USER_AGENTS = [
@@ -663,10 +664,11 @@ class NaukriScraper {
     /**
      * Upload a resume file to Naukri.com profile.
      * Must be called after login() succeeds.
-     * @param {string} filePath - Absolute path to the resume file on disk
+     * @param {string} uniqueFileName - Unique file name of the resume file on S3
      * @returns {Promise<Object>} - { success: boolean, error?: string }
      */
-    async uploadResume(filePath) {
+    async uploadResume(uniqueFileName) {
+        const s3Bucket = new S3Bucket();
         try {
             console.log('📄 Navigating to Naukri profile page for resume upload...');
 
@@ -703,9 +705,12 @@ class NaukriScraper {
                 throw new Error('File input #attachCV not found on the page');
             }
 
-            // Upload the file via the input element
-            console.log(`📤 Uploading resume: ${filePath}`);
-            await fileInput.uploadFile(filePath);
+            // create temp file from S3 bucket and store in local storage
+            const tempFilePath = await s3Bucket.createTempFile(uniqueFileName);
+
+            // Upload the temp file via the input element
+            console.log(`📤 Uploading resume: ${tempFilePath}`);
+            await fileInput.uploadFile(tempFilePath);
 
             // Wait for the upload to process
             await randomDelay(5000, 8000);
@@ -766,6 +771,9 @@ class NaukriScraper {
         } catch (error) {
             console.error('❌ Error uploading resume:', error.message);
             return { success: false, error: error.message };
+        } finally {
+            // delete temp file
+            await s3Bucket.deleteTempFile(uniqueFileName);
         }
     }
 }

@@ -1,6 +1,7 @@
 const ResumeSchedule = require('../models/ResumeSchedule');
 const SchedulerLog = require('../models/SchedulerLog');
 const NaukriScraper = require('../scraper/naukriScraper');
+const S3Bucket = require('../utils/S3Bucket');
 
 /**
  * Execute the resume upload task.
@@ -14,6 +15,8 @@ async function executeUpload() {
         status: 'failed', // default, will update on success
     };
 
+    const s3Bucket = new S3Bucket();
+
     try {
         // Fetch the selected resume from schedule
         const schedule = await ResumeSchedule.findOne().lean();
@@ -25,12 +28,11 @@ async function executeUpload() {
 
         logEntry.resumeId = schedule.resumeId;
         logEntry.resumeName = schedule.originalName;
-        logEntry.filePath = schedule.filePath;
+        logEntry.uniqueFileName = schedule.uniqueFileName;
 
         // Verify the file still exists
-        const fs = require('fs');
-        if (!fs.existsSync(schedule.filePath)) {
-            throw new Error(`Resume file not found at path: ${schedule.filePath}`);
+        if (!await s3Bucket.checkFileExists(schedule.uniqueFileName)) {
+            throw new Error(`Resume file not found at path: ${schedule.uniqueFileName}`);
         }
 
         // Get Naukri credentials from environment
@@ -52,7 +54,7 @@ async function executeUpload() {
             }
 
             // Upload the resume
-            const uploadResult = await scraper.uploadResume(schedule.filePath);
+            const uploadResult = await scraper.uploadResume(schedule.uniqueFileName);
 
             if (uploadResult.success) {
                 logEntry.status = 'success';

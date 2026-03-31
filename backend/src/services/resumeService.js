@@ -3,6 +3,7 @@ const path = require('path');
 const Resume = require('../models/Resume');
 const ResumeSchedule = require('../models/ResumeSchedule');
 const SchedulerLog = require('../models/SchedulerLog');
+const S3Bucket = require('../utils/S3Bucket');
 
 /**
  * Save uploaded resume metadata to DB.
@@ -12,8 +13,7 @@ const SchedulerLog = require('../models/SchedulerLog');
 async function uploadResume(file) {
     const resume = await Resume.create({
         originalName: file.originalname,
-        fileName: file.filename,
-        filePath: file.path,
+        uniqueFileName: file.filename,
         mimeType: file.mimetype,
         fileSize: file.size,
     });
@@ -51,9 +51,8 @@ async function deleteResume(id) {
 
     // Delete the file from disk
     try {
-        if (fs.existsSync(resume.filePath)) {
-            fs.unlinkSync(resume.filePath);
-        }
+        const s3Bucket = new S3Bucket();
+        await s3Bucket.deleteFile(resume.uniqueFileName);
     } catch (err) {
         console.error('Error deleting file from disk:', err.message);
     }
@@ -86,7 +85,7 @@ async function selectForSchedule(resumeId) {
     const schedule = await ResumeSchedule.create({
         resumeId: resume._id,
         originalName: resume.originalName,
-        filePath: resume.filePath,
+        uniqueFileName: resume.uniqueFileName,
         selectedAt: new Date(),
     });
 
