@@ -19,6 +19,9 @@ services:
     restart: unless-stopped
     ports:
       - "3000:3000"
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
     env_file:
       - ./backend/.env
     environment:
@@ -26,6 +29,7 @@ services:
       - PORT=3000
       - REDIS_URL=redis://redis:6379
       - MONGODB_URI=mongodb://db:27017/naukri_jobs
+      - CORS_ORIGINS=http://localhost:5001
     depends_on:
       redis:
         condition: service_healthy
@@ -40,6 +44,9 @@ services:
       context: ./backend
       dockerfile: Dockerfile.worker
     restart: unless-stopped
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
     deploy:
       replicas: 4
     env_file:
@@ -47,7 +54,7 @@ services:
     environment:
       - NODE_ENV=dev
       - REDIS_URL=redis://redis:6379
-      # MONGODB_URI comes from .env (cloud Atlas)
+      - MONGODB_URI=mongodb://db:27017/naukri_jobs
     depends_on:
       redis:
         condition: service_healthy
@@ -62,7 +69,10 @@ services:
     container_name: naukri-frontend
     restart: unless-stopped
     ports:
-      - "5000:5000"
+      - "5001:5000"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
     environment:
       - VITE_API_BASE=http://localhost:3000/api
     depends_on:
