@@ -41,6 +41,9 @@ async function getConfig() {
                 experience: dbConfig.experience || { min: 0, max: 5 },
                 scraping: dbConfig.scraping || { pagesPerKeyword: 3, delayBetweenKeywords: 5000, scrapeJobDetails: true },
                 resumeScheduleTime: dbConfig.resumeScheduleTime || '09:00',
+                totalExperience: dbConfig.totalExperience ?? 0,
+                preferredLocations: dbConfig.preferredLocations || [],
+                thresholdDays: dbConfig.thresholdDays ?? 30,
             };
         }
     } catch (err) {
@@ -63,6 +66,9 @@ async function updateConfig(data) {
         experience: updated.experience,
         scraping: updated.scraping,
         resumeScheduleTime: updated.resumeScheduleTime || '09:00',
+        totalExperience: updated.totalExperience ?? 0,
+        preferredLocations: updated.preferredLocations || [],
+        thresholdDays: updated.thresholdDays ?? 30,
     };
 }
 

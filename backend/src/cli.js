@@ -8,6 +8,7 @@ const { connectDB, closeDB } = require('./config/database');
 const Job = require('./models/Job');
 const NaukriScraper = require('./scraper/naukriScraper');
 const { createJobQueue } = require('./config/queue');
+const { getRedisConnection, REDIS_KEYS } = require('./config/redis');
 const configService = require('./services/configService');
 
 // Package info
@@ -44,6 +45,35 @@ function delay(ms) {
 }
 
 /**
+ * Parse a "posted date" string (e.g. "3 Days Ago", "Just Now", "30+ Days Ago")
+ * and return the approximate number of days ago.
+ * @param {string} postedDate - Text from job card
+ * @returns {number} - Days ago (0 if unparseable or today)
+ */
+function parsePostedDaysAgo(postedDate) {
+    if (!postedDate) return 0;
+    const text = postedDate.toLowerCase().trim();
+
+    if (text.includes('just now') || text.includes('today') || text.includes('few hours')) {
+        return 0;
+    }
+
+    // "X day(s) ago"
+    const dayMatch = text.match(/(\d+)\+?\s*day/i);
+    if (dayMatch) return parseInt(dayMatch[1], 10);
+
+    // "X week(s) ago"  -> approximate
+    const weekMatch = text.match(/(\d+)\+?\s*week/i);
+    if (weekMatch) return parseInt(weekMatch[1], 10) * 7;
+
+    // "X month(s) ago"
+    const monthMatch = text.match(/(\d+)\+?\s*month/i);
+    if (monthMatch) return parseInt(monthMatch[1], 10) * 30;
+
+    return 0; // unknown format, don't skip
+}
+
+/**
  * Scrape basic job cards and dispatch each to the BullMQ queue.
  * Detail scraping is handled asynchronously by the worker.
  * @param {Object} scraper - Initialized scraper instance
@@ -54,6 +84,9 @@ function delay(ms) {
  * @returns {Object} - Results summary
  */
 async function scrapeAndDispatch(scraper, keyword, pages, config = {}, jobQueue) {
+    const redis = getRedisConnection();
+    const thresholdDays = config.thresholdDays || 30;
+
     // Scrape basic job cards only (skip detail scraping – worker does it)
     const jobs = await scraper.scrapeJobs(keyword, pages, {
         experience: config.experience || null,
@@ -63,18 +96,28 @@ async function scrapeAndDispatch(scraper, keyword, pages, config = {}, jobQueue)
 
     if (jobs.length === 0) {
         console.log(chalk.yellow('\n⚠️  No jobs found for the given keyword.'));
-        return { found: 0, dispatched: 0 };
+        return { found: 0, dispatched: 0, skipped: 0 };
     }
 
     // Dispatch each job to the queue
     console.log(chalk.blue(`\n📤 Dispatching ${jobs.length} jobs to the message queue...`));
 
     let dispatched = 0;
+    let skipped = 0;
     const experienceLabel = config.experience
         ? `${config.experience.min || 0}-${config.experience.max || 'any'} yrs`
         : '';
 
     for (const job of jobs) {
+        // Check threshold days filter
+        const daysAgo = parsePostedDaysAgo(job.postedDate);
+        if (daysAgo > thresholdDays) {
+            skipped++;
+            console.log(chalk.gray(`  ⏭️  Skipping "${job.title}" — posted ${daysAgo} days ago (threshold: ${thresholdDays})`));
+            await redis.hincrby(REDIS_KEYS.SEARCH_STATS, 'totalSkipped', 1);
+            continue;
+        }
+
         try {
             await jobQueue.add('scrape-job-detail', {
                 jobUrl: job.jobUrl,
@@ -94,13 +137,19 @@ async function scrapeAndDispatch(scraper, keyword, pages, config = {}, jobQueue)
                 },
             });
             dispatched++;
+
+            // Increment dispatched counter in Redis
+            await redis.incr(REDIS_KEYS.JOBS_DISPATCHED);
         } catch (error) {
             console.error(chalk.red(`  Error dispatching job "${job.title}": ${error.message}`));
         }
     }
 
     console.log(chalk.green(`  ✅ Dispatched ${dispatched}/${jobs.length} jobs to queue`));
-    return { found: jobs.length, dispatched };
+    if (skipped > 0) {
+        console.log(chalk.yellow(`  ⏭️  Skipped ${skipped} jobs (older than ${thresholdDays} days)`));
+    }
+    return { found: jobs.length, dispatched, skipped };
 }
 
 /**
@@ -133,6 +182,7 @@ async function runSingleScrape(keyword, pages, withLogin = false) {
         console.log(chalk.white('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'));
         console.log(chalk.blue(`📊 Jobs Found: ${results.found}`));
         console.log(chalk.green(`📤 Jobs Dispatched to Queue: ${results.dispatched}`));
+        console.log(chalk.yellow(`⏭️  Jobs Skipped: ${results.skipped}`));
         console.log(chalk.gray(`   ℹ️  Worker will process details and save to DB`));
         console.log(chalk.white('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n'));
 
@@ -143,7 +193,201 @@ async function runSingleScrape(keyword, pages, withLogin = false) {
 }
 
 /**
- * Run scraper for all keywords from config file
+ * Run optimized scraper — combines all keywords into one search,
+ * auto-calculates pages, and filters by threshold days.
+ */
+async function runOptimizedScrape() {
+    const config = await loadConfig();
+    const keywords = config.keywords || [];
+    const skills = config.skills || [];
+    const experience = config.experience || null;
+    const preferredLocations = config.preferredLocations || [];
+    const thresholdDays = config.thresholdDays || 30;
+
+    if (keywords.length === 0) {
+        console.log(chalk.yellow('\n⚠️  No keywords found in config'));
+        console.log(chalk.white('Please add keywords via Settings page'));
+        return;
+    }
+
+    const redis = getRedisConnection();
+
+    // Reset counters for this session
+    await redis.set(REDIS_KEYS.JOBS_DISPATCHED, 0);
+    await redis.set(REDIS_KEYS.JOBS_PROCESSED, 0);
+    await redis.del(REDIS_KEYS.SEARCH_STATS);
+
+    console.log(chalk.blue(`\n📋 Optimized Search Configuration:`));
+    console.log(chalk.white(`   Keywords: ${keywords.join(', ')}`));
+    if (skills.length > 0) {
+        console.log(chalk.magenta(`   🔧 Skills to match: ${skills.join(', ')}`));
+    }
+    if (experience) {
+        console.log(chalk.magenta(`   📋 Experience filter: ${experience.min || 0}-${experience.max || 'any'} years`));
+    }
+    if (preferredLocations.length > 0) {
+        console.log(chalk.magenta(`   📍 Preferred locations: ${preferredLocations.join(', ')}`));
+    }
+    console.log(chalk.yellow(`   📅 Threshold: skip jobs older than ${thresholdDays} days`));
+    console.log(chalk.gray(`   📝 Detail scraping: handled by worker via message queue`));
+
+    const scraper = new NaukriScraper();
+    const jobQueue = createJobQueue();
+    let totalStats = { found: 0, dispatched: 0, skipped: 0 };
+
+    try {
+        // Initialize browser
+        await scraper.initBrowser();
+
+        // Login with Naukri credentials
+        const email = process.env.NAUKRI_EMAIL;
+        const password = process.env.NAUKRI_PASSWORD;
+        await scraper.login(email, password);
+
+        // Perform search by typing into Naukri's search bar (page 1)
+        console.log(chalk.cyan(`\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`));
+        console.log(chalk.cyan.bold(`📌 Combined Search: "${keywords.join(', ')}"`));
+        console.log(chalk.cyan(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`));
+
+        await scraper.performCombinedSearch(keywords, experience, preferredLocations);
+
+        // 📸 Take screenshot after search for verification
+        await scraper.captureSearchScreenshot('combined_search_page1.png');
+
+        // Extract total search results metadata
+        const metadata = await scraper.extractSearchMetadata();
+        const totalResults = metadata.totalResults;
+        const jobsPerPage = metadata.jobsPerPage || 20;
+        const totalPages = totalResults > 0 ? Math.ceil(totalResults / jobsPerPage) : 1;
+
+        console.log(chalk.blue(`\n📊 Search Results: ${totalResults} total jobs, ${totalPages} pages`));
+
+        // Store in Redis
+        await redis.hset(REDIS_KEYS.SEARCH_STATS, {
+            totalSearchResults: totalResults.toString(),
+            totalPages: totalPages.toString(),
+            currentPage: '0',
+            totalSkipped: '0',
+        });
+
+        const experienceLabel = experience
+            ? `${experience.min || 0}-${experience.max || 'any'} yrs`
+            : '';
+
+        // Scrape each page
+        for (let pageNum = 1; pageNum <= totalPages; pageNum++) {
+            try {
+                console.log(chalk.cyan(`\n📄 Scraping page ${pageNum}/${totalPages}...`));
+
+                // Update current page in Redis
+                await redis.hset(REDIS_KEYS.SEARCH_STATS, 'currentPage', pageNum.toString());
+
+                // Navigate to the page (page 1 is already loaded from performCombinedSearch)
+                if (pageNum > 1) {
+                    await scraper.navigateToSearchUrl(keywords, experience, preferredLocations, pageNum);
+                }
+
+                // Wait for job cards
+                try {
+                    await scraper.page.waitForSelector('.srp-jobtuple-wrapper, .jobTuple, [data-job-id], .cust-job-tuple', {
+                        timeout: 10000,
+                    });
+                } catch (e) {
+                    console.log(chalk.yellow(`⚠️  No job cards found on page ${pageNum}, stopping pagination`));
+                    break;
+                }
+
+                // Extract job cards
+                const combinedKeywordStr = keywords.join(' ');
+                const jobs = await scraper.extractJobCards(combinedKeywordStr);
+
+                if (jobs.length === 0) {
+                    console.log(chalk.yellow(`⚠️  No jobs extracted from page ${pageNum}, stopping`));
+                    break;
+                }
+
+                console.log(chalk.white(`   ✅ Found ${jobs.length} jobs on page ${pageNum}`));
+
+                // Dispatch with threshold filtering
+                let pageDispatched = 0;
+                let pageSkipped = 0;
+
+                for (const job of jobs) {
+                    // Check threshold days
+                    const daysAgo = parsePostedDaysAgo(job.postedDate);
+                    if (daysAgo > thresholdDays) {
+                        pageSkipped++;
+                        await redis.hincrby(REDIS_KEYS.SEARCH_STATS, 'totalSkipped', 1);
+                        continue;
+                    }
+
+                    try {
+                        await jobQueue.add('scrape-job-detail', {
+                            jobUrl: job.jobUrl,
+                            searchKeyword: combinedKeywordStr,
+                            pageNumber: pageNum,
+                            configSkills: skills,
+                            experienceFilter: experienceLabel,
+                            basicDetails: {
+                                title: job.title,
+                                company: job.company,
+                                location: job.location,
+                                experience: job.experience,
+                                salary: job.salary,
+                                skills: job.skills,
+                                description: job.description,
+                                postedDate: job.postedDate,
+                            },
+                        });
+                        pageDispatched++;
+                        await redis.incr(REDIS_KEYS.JOBS_DISPATCHED);
+                    } catch (err) {
+                        console.error(chalk.red(`  Error dispatching: ${err.message}`));
+                    }
+                }
+
+                totalStats.found += jobs.length;
+                totalStats.dispatched += pageDispatched;
+                totalStats.skipped += pageSkipped;
+
+                console.log(chalk.green(`   📤 Dispatched: ${pageDispatched}`) +
+                    (pageSkipped > 0 ? chalk.yellow(` | ⏭️ Skipped: ${pageSkipped}`) : ''));
+
+                // Delay between pages
+                if (pageNum < totalPages) {
+                    await delay(3000 + Math.random() * 2000);
+                }
+
+            } catch (error) {
+                console.error(chalk.red(`❌ Error on page ${pageNum}: ${error.message}`));
+                if (pageNum === 1) {
+                    throw error;
+                }
+                break;
+            }
+        }
+
+        // Final summary
+        console.log(chalk.green('\n\n╔════════════════════════════════════════╗'));
+        console.log(chalk.green('║     🎉 OPTIMIZED SCRAPE COMPLETE!     ║'));
+        console.log(chalk.green('╚════════════════════════════════════════╝'));
+        console.log(chalk.white('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'));
+        console.log(chalk.blue(`🔎 Search Results: ${totalResults}`));
+        console.log(chalk.blue(`📄 Pages Scraped: ${totalPages}`));
+        console.log(chalk.blue(`📊 Total Jobs Found: ${totalStats.found}`));
+        console.log(chalk.green(`📤 Total Jobs Dispatched: ${totalStats.dispatched}`));
+        console.log(chalk.yellow(`⏭️  Total Jobs Skipped: ${totalStats.skipped}`));
+        console.log(chalk.gray(`   ℹ️  Run "npm run worker" to process the queue`));
+        console.log(chalk.white('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n'));
+
+    } finally {
+        await scraper.closeBrowser();
+        await jobQueue.close();
+    }
+}
+
+/**
+ * Run scraper for all keywords from config file (legacy per-keyword approach)
  */
 async function runFromConfig() {
     const config = await loadConfig();
@@ -174,7 +418,7 @@ async function runFromConfig() {
 
     const scraper = new NaukriScraper();
     const jobQueue = createJobQueue();
-    let totalStats = { found: 0, dispatched: 0 };
+    let totalStats = { found: 0, dispatched: 0, skipped: 0 };
 
     try {
         // Initialize browser
@@ -196,6 +440,7 @@ async function runFromConfig() {
 
             totalStats.found += results.found;
             totalStats.dispatched += results.dispatched;
+            totalStats.skipped += results.skipped;
 
             // Delay between keywords
             if (i < keywords.length - 1) {
@@ -212,6 +457,7 @@ async function runFromConfig() {
         console.log(chalk.blue(`🔑 Keywords Processed: ${keywords.length}`));
         console.log(chalk.blue(`📊 Total Jobs Found: ${totalStats.found}`));
         console.log(chalk.green(`📤 Total Jobs Dispatched: ${totalStats.dispatched}`));
+        console.log(chalk.yellow(`⏭️  Total Jobs Skipped: ${totalStats.skipped}`));
         console.log(chalk.gray(`   ℹ️  Run "npm run worker" to process the queue`));
         console.log(chalk.white('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n'));
 
@@ -306,10 +552,28 @@ program
     .description('Scrape job listings from Naukri.com and store in MongoDB')
     .version(packageInfo.version);
 
-// New "run" command - uses config file and login
+// New "run" command - optimized combined search (default)
 program
     .command('run')
-    .description('Run scraper for all keywords in config.json (with Naukri login)')
+    .description('Run optimized scraper — combines all keywords into one search, auto-paginates, filters by threshold')
+    .action(async () => {
+        showBanner();
+
+        try {
+            await connectDB();
+            await runOptimizedScrape();
+        } catch (error) {
+            console.error(chalk.red(`\n❌ Error: ${error.message}`));
+            process.exit(1);
+        } finally {
+            await closeDB();
+        }
+    });
+
+// Legacy per-keyword scrape command
+program
+    .command('run-keyword')
+    .description('Run scraper for each keyword individually (legacy mode)')
     .action(async () => {
         showBanner();
 

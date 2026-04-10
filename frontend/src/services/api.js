@@ -85,6 +85,18 @@ export async function updateConfig(config) {
     return res.json();
 }
 
+// ─── Scraper Stats API ───────────────────────────────────────
+
+/**
+ * Fetch live scraper stats (Redis counters).
+ * @returns {Promise<{ data: Object }>}
+ */
+export async function fetchScraperStats() {
+    const res = await fetch(`${API_BASE}/scraper-stats`);
+    if (!res.ok) throw new Error('Failed to fetch scraper stats');
+    return res.json();
+}
+
 // ─── Resume API ──────────────────────────────────────────────
 
 /**

@@ -4,7 +4,8 @@ require('dotenv').config({ quiet: true });
 
 const chalk = require('chalk');
 const { Worker } = require('bullmq');
-const { createRedisConnection, JOB_QUEUE_NAME } = require('../config/queue');
+const { getRedisConnection, REDIS_KEYS } = require('../config/redis');
+const { JOB_QUEUE_NAME } = require('../config/queue');
 const { connectDB, closeDB } = require('../config/database');
 const { processJob, closeSharedBrowser } = require('./jobProcessor');
 
@@ -19,8 +20,8 @@ async function startWorker() {
     // 1. Connect to MongoDB
     await connectDB();
 
-    // 2. Create Redis connection for the worker
-    const connection = createRedisConnection();
+    // 2. Get shared Redis connection
+    const connection = getRedisConnection();
 
     // 3. Create BullMQ Worker
     const worker = new Worker(
@@ -39,8 +40,15 @@ async function startWorker() {
     );
 
     // ── Worker event handlers ──────────────────────────────────────────────
-    worker.on('completed', (job, result) => {
+    worker.on('completed', async (job, result) => {
         console.log(chalk.green(`  ✅ Job ${job.id} completed – match: ${result?.matchPercentage ?? '-'}%`));
+
+        // Increment jobs_processed counter in Redis
+        try {
+            await connection.incr(REDIS_KEYS.JOBS_PROCESSED);
+        } catch (err) {
+            console.error(chalk.yellow(`  ⚠️ Redis INCR error: ${err.message}`));
+        }
     });
 
     worker.on('failed', (job, err) => {

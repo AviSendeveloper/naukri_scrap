@@ -6,7 +6,10 @@ import {
     HiOutlineAdjustments,
     HiOutlineSave,
     HiOutlinePlus,
-    HiOutlineX
+    HiOutlineX,
+    HiOutlineLocationMarker,
+    HiOutlineCalendar,
+    HiOutlineBriefcase,
 } from 'react-icons/hi'
 import { fetchConfig, updateConfig } from '../services/api'
 import Loader from '../components/Loader'
@@ -16,6 +19,7 @@ export default function Settings() {
     const [isLoading, setIsLoading] = useState(true)
     const [newKeyword, setNewKeyword] = useState('')
     const [newSkill, setNewSkill] = useState('')
+    const [newLocation, setNewLocation] = useState('')
     const [saveStatus, setSaveStatus] = useState('idle') // idle | saving | saved | error
 
     useEffect(() => {
@@ -45,6 +49,18 @@ export default function Settings() {
 
     const removeSkill = (skill) => {
         setConfig(prev => ({ ...prev, skills: prev.skills.filter(s => s !== skill) }))
+    }
+
+    const addLocation = () => {
+        const locs = config.preferredLocations || []
+        if (newLocation.trim() && !locs.includes(newLocation.trim())) {
+            setConfig(prev => ({ ...prev, preferredLocations: [...(prev.preferredLocations || []), newLocation.trim()] }))
+            setNewLocation('')
+        }
+    }
+
+    const removeLocation = (loc) => {
+        setConfig(prev => ({ ...prev, preferredLocations: (prev.preferredLocations || []).filter(l => l !== loc) }))
     }
 
     const handleSave = async () => {
@@ -214,6 +230,103 @@ export default function Settings() {
                     </div>
                 </div>
 
+                {/* Total Experience for Search */}
+                <div className="settings-card animate-in animate-in-delay-3">
+                    <h3><HiOutlineBriefcase /> Total Experience</h3>
+                    <p style={{ fontSize: 'var(--font-sm)', color: 'var(--text-muted)', marginBottom: 'var(--space-4)' }}>
+                        Your total years of experience (used in Naukri search query)
+                    </p>
+                    <div className="form-group" style={{ marginBottom: 0 }}>
+                        <label className="form-label">Years of experience</label>
+                        <input
+                            className="form-input"
+                            type="number"
+                            min="0"
+                            max="50"
+                            value={config.totalExperience ?? 0}
+                            onChange={e => setConfig(prev => ({
+                                ...prev,
+                                totalExperience: parseInt(e.target.value) || 0
+                            }))}
+                        />
+                    </div>
+                    <div style={{
+                        marginTop: 'var(--space-4)',
+                        padding: 'var(--space-3)',
+                        background: 'var(--accent-info-muted)',
+                        borderRadius: 'var(--radius-md)',
+                        fontSize: 'var(--font-sm)',
+                        color: 'var(--accent-info)'
+                    }}>
+                        Search will include: {config.totalExperience ?? 0} years experience
+                    </div>
+                </div>
+
+                {/* Preferred Locations */}
+                <div className="settings-card animate-in animate-in-delay-3">
+                    <h3><HiOutlineLocationMarker /> Preferred Locations</h3>
+                    <p style={{ fontSize: 'var(--font-sm)', color: 'var(--text-muted)', marginBottom: 'var(--space-4)' }}>
+                        Preferred job locations for Naukri search
+                    </p>
+                    <div className="settings-locations-list">
+                        {(config.preferredLocations || []).map(loc => (
+                            <span key={loc} className="tag primary" style={{ padding: '6px 12px', gap: '6px', display: 'inline-flex', alignItems: 'center' }}>
+                                {loc}
+                                <HiOutlineX
+                                    style={{ cursor: 'pointer', opacity: 0.7 }}
+                                    onClick={() => removeLocation(loc)}
+                                />
+                            </span>
+                        ))}
+                    </div>
+                    <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
+                        <input
+                            className="form-input"
+                            type="text"
+                            placeholder="Add location (e.g. Bangalore, Remote)..."
+                            value={newLocation}
+                            onChange={e => setNewLocation(e.target.value)}
+                            onKeyDown={e => e.key === 'Enter' && addLocation()}
+                            style={{ flex: 1 }}
+                        />
+                        <button className="btn btn-outline" onClick={addLocation}>
+                            <HiOutlinePlus />
+                        </button>
+                    </div>
+                </div>
+
+                {/* Threshold Days */}
+                <div className="settings-card animate-in animate-in-delay-4">
+                    <h3><HiOutlineCalendar /> Job Freshness Threshold</h3>
+                    <p style={{ fontSize: 'var(--font-sm)', color: 'var(--text-muted)', marginBottom: 'var(--space-4)' }}>
+                        Skip job listings older than this many days during scraping
+                    </p>
+                    <div className="form-group" style={{ marginBottom: 0 }}>
+                        <label className="form-label">Threshold (days)</label>
+                        <input
+                            className="form-input"
+                            type="number"
+                            min="1"
+                            max="365"
+                            value={config.thresholdDays ?? 30}
+                            onChange={e => setConfig(prev => ({
+                                ...prev,
+                                thresholdDays: parseInt(e.target.value) || 30
+                            }))}
+                        />
+                    </div>
+                    <div style={{
+                        marginTop: 'var(--space-4)',
+                        padding: 'var(--space-3)',
+                        background: 'var(--accent-warning-muted)',
+                        borderRadius: 'var(--radius-md)',
+                        fontSize: 'var(--font-sm)',
+                        color: 'var(--accent-warning)'
+                    }}>
+                        Jobs older than {config.thresholdDays ?? 30} days will be skipped
+                    </div>
+                </div>
+
                 {/* Scraping Parameters */}
                 <div className="settings-card animate-in animate-in-delay-4">
                     <h3><HiOutlineAdjustments /> Scraping Parameters</h3>
@@ -221,7 +334,7 @@ export default function Settings() {
                         Control scraping behavior
                     </p>
                     <div className="form-group">
-                        <label className="form-label">Pages per keyword</label>
+                        <label className="form-label">Pages per keyword (legacy mode)</label>
                         <input
                             className="form-input"
                             type="number"

@@ -20,7 +20,10 @@ async function getConfig(req, res) {
  */
 async function updateConfig(req, res) {
     try {
-        const { keywords, skills, experience, scraping, resumeScheduleTime } = req.body;
+        const {
+            keywords, skills, experience, scraping,
+            resumeScheduleTime, totalExperience, preferredLocations, thresholdDays
+        } = req.body;
 
         // Basic validation
         if (keywords !== undefined && !Array.isArray(keywords)) {
@@ -29,8 +32,14 @@ async function updateConfig(req, res) {
         if (skills !== undefined && !Array.isArray(skills)) {
             return res.status(400).json({ success: false, message: 'skills must be an array' });
         }
+        if (preferredLocations !== undefined && !Array.isArray(preferredLocations)) {
+            return res.status(400).json({ success: false, message: 'preferredLocations must be an array' });
+        }
 
-        const updated = await configService.updateConfig({ keywords, skills, experience, scraping, resumeScheduleTime });
+        const updated = await configService.updateConfig({
+            keywords, skills, experience, scraping,
+            resumeScheduleTime, totalExperience, preferredLocations, thresholdDays
+        });
 
         // If scheduler time changed, reschedule the cron job
         if (resumeScheduleTime !== undefined) {

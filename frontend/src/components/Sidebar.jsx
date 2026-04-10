@@ -1,13 +1,15 @@
+import { useState, useCallback } from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
 import {
     HiOutlineViewGrid,
     HiOutlineBriefcase,
     HiOutlineChartBar,
     HiOutlineCog,
-    HiOutlineSearch,
     HiOutlineLightningBolt,
-    HiOutlineDocumentText
+    HiOutlineDocumentText,
+    HiOutlineRefresh,
 } from 'react-icons/hi'
+import { fetchScraperStats } from '../services/api'
 
 const navItems = [
     {
@@ -29,6 +31,20 @@ const navItems = [
 
 export default function Sidebar() {
     const location = useLocation()
+    const [stats, setStats] = useState(null)
+    const [isRefreshing, setIsRefreshing] = useState(false)
+
+    const loadStats = useCallback(async () => {
+        setIsRefreshing(true)
+        try {
+            const res = await fetchScraperStats()
+            setStats(res.data)
+        } catch (err) {
+            // Silently fail — stats are optional
+        } finally {
+            setIsRefreshing(false)
+        }
+    }, [])
 
     return (
         <aside className="sidebar">
@@ -66,19 +82,48 @@ export default function Sidebar() {
             </nav>
 
             <div className="sidebar-footer">
-                <div style={{
-                    padding: 'var(--space-4)',
-                    background: 'var(--accent-primary-muted)',
-                    borderRadius: 'var(--radius-md)',
-                    textAlign: 'center'
-                }}>
-                    <HiOutlineSearch style={{ fontSize: '20px', color: 'var(--accent-primary)', marginBottom: '4px' }} />
-                    <p style={{ fontSize: 'var(--font-xs)', color: 'var(--text-secondary)', marginBottom: '8px' }}>
-                        Last scrape: 6h ago
-                    </p>
-                    <button className="btn btn-primary" style={{ width: '100%', justifyContent: 'center', fontSize: 'var(--font-xs)', padding: '6px 12px' }}>
-                        Run Scraper
-                    </button>
+                <div className="scraper-stats-widget">
+                    <div className="scraper-stats-header">
+                        <HiOutlineLightningBolt />
+                        <span>Scraper Stats</span>
+                        <button
+                            className="scraper-stats-refresh-btn"
+                            onClick={loadStats}
+                            disabled={isRefreshing}
+                            title="Refresh stats"
+                        >
+                            <HiOutlineRefresh className={isRefreshing ? 'spin' : ''} />
+                        </button>
+                    </div>
+
+                    {stats ? (
+                        <div className="scraper-stats-grid">
+                            <div className="scraper-stat-item">
+                                <span className="scraper-stat-value dispatched">{stats.jobsDispatched}</span>
+                                <span className="scraper-stat-label">Dispatched</span>
+                            </div>
+                            <div className="scraper-stat-item">
+                                <span className="scraper-stat-value processed">{stats.jobsProcessed}</span>
+                                <span className="scraper-stat-label">Processed</span>
+                            </div>
+                            <div className="scraper-stat-item">
+                                <span className="scraper-stat-value results">{stats.totalSearchResults}</span>
+                                <span className="scraper-stat-label">Results</span>
+                            </div>
+                            <div className="scraper-stat-item">
+                                <span className="scraper-stat-value pages">
+                                    {stats.currentPage}/{stats.totalPages}
+                                </span>
+                                <span className="scraper-stat-label">Pages</span>
+                            </div>
+                            <div className="scraper-stat-item span-2">
+                                <span className="scraper-stat-value skipped">{stats.totalSkipped}</span>
+                                <span className="scraper-stat-label">Skipped (threshold)</span>
+                            </div>
+                        </div>
+                    ) : (
+                        <p className="scraper-stats-loading">Click refresh to load stats</p>
+                    )}
                 </div>
             </div>
         </aside>

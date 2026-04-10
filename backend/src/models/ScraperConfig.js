@@ -40,6 +40,28 @@ const scraperConfigSchema = new mongoose.Schema({
         default: '09:00',
         trim: true,
     },
+
+    // Total years of experience (for Naukri search query)
+    totalExperience: {
+        type: Number,
+        default: 0,
+        min: 0,
+        max: 50,
+    },
+
+    // Preferred job locations
+    preferredLocations: {
+        type: [String],
+        default: [],
+    },
+
+    // Skip jobs older than this many days
+    thresholdDays: {
+        type: Number,
+        default: 30,
+        min: 1,
+        max: 365,
+    },
 }, {
     timestamps: true,
 });
@@ -70,6 +92,9 @@ scraperConfigSchema.statics.upsertConfig = async function (data) {
     if (data.experience !== undefined) update.experience = data.experience;
     if (data.scraping !== undefined) update.scraping = data.scraping;
     if (data.resumeScheduleTime !== undefined) update.resumeScheduleTime = data.resumeScheduleTime;
+    if (data.totalExperience !== undefined) update.totalExperience = data.totalExperience;
+    if (data.preferredLocations !== undefined) update.preferredLocations = data.preferredLocations;
+    if (data.thresholdDays !== undefined) update.thresholdDays = data.thresholdDays;
 
     const config = await this.findOneAndUpdate(
         { configId: 'default' },

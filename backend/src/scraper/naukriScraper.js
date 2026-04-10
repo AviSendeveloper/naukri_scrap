@@ -268,6 +268,366 @@ class NaukriScraper {
     }
 
     /**
+     * Set a value on a React-controlled input using the native value setter trick.
+     * This bypasses React's synthetic event system by using the native HTMLInputElement
+     * value setter and dispatching real DOM events.
+     * @param {string} selector - CSS selector for the input
+     * @param {string} value - Value to set
+     * @returns {Promise<boolean>} - Whether the value was set
+     */
+    async setReactInputValue(selector, value) {
+        return await this.page.evaluate((sel, val) => {
+            const input = document.querySelector(sel);
+            if (!input) return false;
+
+            // Focus the input first
+            input.focus();
+
+            // Use native setter to bypass React's controlled component
+            const nativeInputValueSetter = Object.getOwnPropertyDescriptor(
+                window.HTMLInputElement.prototype, 'value'
+            ).set;
+            nativeInputValueSetter.call(input, val);
+
+            // Dispatch events that React listens to
+            input.dispatchEvent(new Event('input', { bubbles: true }));
+            input.dispatchEvent(new Event('change', { bubbles: true }));
+
+            return true;
+        }, selector, value);
+    }
+
+    /**
+     * Perform a combined search by filling keywords, experience, and location
+     * into Naukri's search bar using React-compatible input methods, then clicking search.
+     * Takes screenshots after each step for verification.
+     * @param {string[]} keywords - All search keywords
+     * @param {Object} [experience] - { min, max } experience range
+     * @param {string[]} [locations] - Preferred locations
+     * @returns {Promise<void>}
+     */
+    async performCombinedSearch(keywords = [], experience = null, locations = []) {
+        const combinedKeywords = keywords.join(', ');
+
+        console.log(`\n🔍 Performing combined search on Naukri.com...`);
+        console.log(`   Keywords: ${combinedKeywords}`);
+        if (experience) console.log(`   Experience: ${experience.min || 0}-${experience.max || 'any'} years`);
+        if (locations.length > 0) console.log(`   Locations: ${locations.join(', ')}`);
+
+        // Navigate to Naukri homepage
+        await this.page.goto('https://www.naukri.com/', {
+            waitUntil: 'networkidle2',
+            timeout: 30000,
+        });
+        await randomDelay(2000, 3000);
+
+        // --- Step 1: Fill keywords into search input ---
+        const searchInputSelectors = [
+            'input.suggestor-input',
+            'input[placeholder*="skills"]',
+            'input[placeholder*="designations"]',
+            'input[placeholder*="keyword"]',
+            'input[placeholder*="Enter keyword"]',
+            '.nI-gNb-sb__main input',
+            'input[class*="suggestor"]',
+        ];
+
+        let matchedKeywordSelector = null;
+        for (const sel of searchInputSelectors) {
+            const el = await this.page.$(sel);
+            if (el) {
+                matchedKeywordSelector = sel;
+                break;
+            }
+        }
+
+        if (!matchedKeywordSelector) {
+            console.log('⚠️  Could not find search input, using URL fallback...');
+            await this.navigateToSearchUrl(keywords, experience, locations, 1);
+            return;
+        }
+
+        // Use React-compatible value setter
+        const keywordSet = await this.setReactInputValue(matchedKeywordSelector, combinedKeywords);
+        if (keywordSet) {
+            console.log(`   ✅ Set keywords via React value setter`);
+        } else {
+            console.log(`   ⚠️  React setter failed, trying type() fallback...`);
+            const input = await this.page.$(matchedKeywordSelector);
+            await input.click({ clickCount: 3 });
+            await randomDelay(200, 400);
+            await input.type(combinedKeywords, { delay: 30 });
+        }
+        await randomDelay(800, 1200);
+
+        // Dismiss autocomplete dropdown
+        await this.page.keyboard.press('Escape');
+        await randomDelay(500, 800);
+
+        // 📸 Screenshot after keywords
+        await this.captureSearchScreenshot('step1_keywords_filled.png');
+
+        // --- Step 2: Fill experience dropdown ---
+        if (experience && experience.max !== undefined) {
+            const expSelectors = [
+                'input[placeholder*="experience"]',
+                'input[placeholder*="Experience"]',
+                'input[class*="experience"]',
+                '#experienceDD',
+                '.experience input',
+                '.nI-gNb-sb__experience input',
+            ];
+
+            for (const sel of expSelectors) {
+                const expInput = await this.page.$(sel);
+                if (expInput) {
+                    await expInput.click();
+                    await randomDelay(500, 800);
+
+                    // Find the experience option in dropdown
+                    const expValue = experience.max.toString();
+                    try {
+                        // Look for dropdown options
+                        const optionSelectors = [
+                            `li[title="${expValue} years"]`,
+                            `li[index="${expValue}"]`,
+                            `[class*="dropdown"] li`,
+                            `ul li`,
+                        ];
+                        let found = false;
+                        for (const optSel of optionSelectors) {
+                            const options = await this.page.$$(optSel);
+                            for (const opt of options) {
+                                const text = await opt.evaluate(el => el.textContent?.trim());
+                                if (text && text.includes(expValue)) {
+                                    await opt.click();
+                                    console.log(`   ✅ Selected experience: ${expValue} years`);
+                                    found = true;
+                                    break;
+                                }
+                            }
+                            if (found) break;
+                        }
+                        if (!found) {
+                            console.log(`   ⚠️  Could not find experience ${expValue} in dropdown`);
+                        }
+                    } catch (e) {
+                        console.log(`   ⚠️  Experience dropdown error: ${e.message}`);
+                    }
+                    await randomDelay(500, 800);
+                    break;
+                }
+            }
+        }
+
+        // --- Step 3: Fill location field ---
+        if (locations.length > 0) {
+            const locationStr = locations.join(', ');
+            const locSelectors = [
+                'input[placeholder*="location"]',
+                'input[placeholder*="Location"]',
+                'input[placeholder*="Enter location"]',
+                '.nI-gNb-sb__location input',
+                'input[class*="location"]',
+            ];
+
+            let matchedLocSelector = null;
+            for (const sel of locSelectors) {
+                const el = await this.page.$(sel);
+                if (el) {
+                    matchedLocSelector = sel;
+                    break;
+                }
+            }
+
+            if (matchedLocSelector) {
+                const locSet = await this.setReactInputValue(matchedLocSelector, locationStr);
+                if (locSet) {
+                    console.log(`   ✅ Set locations via React value setter`);
+                } else {
+                    const locInput = await this.page.$(matchedLocSelector);
+                    await locInput.click({ clickCount: 3 });
+                    await randomDelay(200, 400);
+                    await locInput.type(locationStr, { delay: 30 });
+                    console.log(`   ✅ Typed locations (fallback)`);
+                }
+                await randomDelay(800, 1200);
+                await this.page.keyboard.press('Escape');
+                await randomDelay(500, 800);
+            }
+        }
+
+        // 📸 Screenshot after all fields filled
+        await this.captureSearchScreenshot('step2_all_fields_filled.png');
+
+        // --- Step 4: Click search button ---
+        const searchBtnSelectors = [
+            'button.nI-gNb-sb__icon-wrapper',
+            'button[class*="search-btn"]',
+            '.qsbSubmit',
+            'button[type="submit"]',
+            '.nI-gNb-sb__main button',
+        ];
+
+        let clicked = false;
+        for (const sel of searchBtnSelectors) {
+            const btn = await this.page.$(sel);
+            if (btn) {
+                await btn.click();
+                clicked = true;
+                console.log(`   ✅ Clicked search button`);
+                break;
+            }
+        }
+
+        if (!clicked) {
+            // Fallback: press Enter
+            await this.page.keyboard.press('Enter');
+            console.log(`   ✅ Pressed Enter to search`);
+        }
+
+        // Wait for search results to load
+        await this.page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 30000 }).catch(() => {});
+        await randomDelay(3000, 5000);
+
+        // Store the actual URL Naukri generated (used for page 2+ navigation)
+        this._searchBaseUrl = this.page.url();
+        console.log(`   🔗 Search URL: ${this._searchBaseUrl}`);
+
+        // 📸 Screenshot of search results
+        await this.captureSearchScreenshot('step3_search_results.png');
+    }
+
+    /**
+     * Navigate to a search results page for page 2+.
+     * Uses the URL that Naukri generated from the page 1 search, then modifies
+     * the page number in the slug. This ensures URL format is always correct.
+     * @param {string[]} keywords - All search keywords
+     * @param {Object} [experience] - { min, max }
+     * @param {string[]} [locations] - Preferred locations
+     * @param {number} pageNum - Page number
+     * @returns {Promise<void>}
+     */
+    async navigateToSearchUrl(keywords, experience, locations, pageNum) {
+        // If we have the base URL from page 1, modify it for the target page
+        if (this._searchBaseUrl && pageNum > 1) {
+            let url = this._searchBaseUrl;
+
+            // Naukri URL format: /slug-jobs-in-city -> /slug-jobs-in-city-2
+            // or /slug-jobs -> /slug-jobs-2
+            // Remove existing page number if present
+            url = url.replace(/-(\d+)\?/, '?');
+
+            // Insert page number before the query string
+            const qIndex = url.indexOf('?');
+            if (qIndex !== -1) {
+                url = url.substring(0, qIndex) + `-${pageNum}` + url.substring(qIndex);
+            }
+
+            console.log(`   🔗 Navigating (page ${pageNum}): ${url}`);
+            await this.page.goto(url, { waitUntil: 'networkidle2', timeout: 30000 });
+            await randomDelay(2000, 3000);
+            return;
+        }
+
+        // Fallback: construct URL manually using Naukri's format
+        const searchParam = keywords.join(', ');
+        const slugParts = keywords.map(kw => kw.toLowerCase().replace(/\./g, '-dot-').replace(/\s+/g, '-'));
+        let slug = slugParts.join('-');
+
+        if (locations.length > 0) {
+            slug += `-jobs-in-${locations[0].toLowerCase()}`;
+        } else {
+            slug += '-jobs';
+        }
+
+        if (pageNum > 1) {
+            slug += `-${pageNum}`;
+        }
+
+        let url = `https://www.naukri.com/${slug}?k=${encodeURIComponent(searchParam)}`;
+
+        if (locations.length > 0) {
+            url += `&l=${encodeURIComponent(locations.join(', '))}`;
+        }
+
+        if (experience && experience.max !== undefined) {
+            url += `&experience=${experience.max}`;
+        }
+
+        console.log(`   🔗 Navigating: ${url}`);
+        await this.page.goto(url, { waitUntil: 'networkidle2', timeout: 30000 });
+        await randomDelay(2000, 3000);
+    }
+
+    /**
+     * Extract search result metadata from the current search results page.
+     * Reads the "1-20 of X jobs" count to determine totals.
+     * @returns {Promise<{ totalResults: number, jobsPerPage: number }>}
+     */
+    async extractSearchMetadata() {
+        try {
+            const metadata = await this.page.evaluate(() => {
+                const result = { totalResults: 0, jobsPerPage: 20 };
+
+                // Try multiple selectors for the count string
+                const countSelectors = [
+                    '.styles_count-string__DlPaZ',
+                    '.count-string',
+                    '[class*="count-string"]',
+                    '.search-result-header span',
+                ];
+
+                for (const sel of countSelectors) {
+                    const el = document.querySelector(sel);
+                    if (el) {
+                        const text = el.textContent?.trim() || '';
+                        // Pattern: "1-20 of 1,234 jobs" or "Showing 1 – 20 of 1234"
+                        const totalMatch = text.match(/of\s+([\d,]+)/i);
+                        if (totalMatch) {
+                            result.totalResults = parseInt(totalMatch[1].replace(/,/g, ''), 10);
+                        }
+                        const perPageMatch = text.match(/(\d+)\s*-\s*(\d+)/);
+                        if (perPageMatch) {
+                            result.jobsPerPage = parseInt(perPageMatch[2], 10) - parseInt(perPageMatch[1], 10) + 1;
+                        }
+                        break;
+                    }
+                }
+
+                return result;
+            });
+
+            console.log(`📊 Search metadata: ${metadata.totalResults} total results, ${metadata.jobsPerPage} per page`);
+            return metadata;
+
+        } catch (error) {
+            console.error(`  ⚠️  Error extracting search metadata: ${error.message}`);
+            return { totalResults: 0, jobsPerPage: 20 };
+        }
+    }
+
+    /**
+     * Capture a screenshot of the current page state.
+     * Used to verify search results after inputting all keywords.
+     * @param {string} [filename] - Screenshot file name
+     * @returns {Promise<string>} - Path to the saved screenshot
+     */
+    async captureSearchScreenshot(filename = 'search_results.png') {
+        const path = require('path');
+        const screenshotDir = path.join(__dirname, '..', '..', 'screenshots');
+        const fs = require('fs');
+        if (!fs.existsSync(screenshotDir)) {
+            fs.mkdirSync(screenshotDir, { recursive: true });
+        }
+
+        const screenshotPath = path.join(screenshotDir, filename);
+        await this.page.screenshot({ path: screenshotPath, fullPage: false });
+        console.log(`📸 Screenshot saved: ${screenshotPath}`);
+        return screenshotPath;
+    }
+
+    /**
      * Extract job listings from the current page
      * @param {string} keyword - The search keyword used
      * @returns {Promise<Array>}
