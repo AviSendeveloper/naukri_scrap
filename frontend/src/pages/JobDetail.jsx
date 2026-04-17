@@ -50,7 +50,7 @@ export default function JobDetail() {
 
     return (
         <div className="job-detail animate-in">
-            <div className="job-detail-back" onClick={() => navigate('/jobs')}>
+            <div className="job-detail-back" onClick={() => navigate(-1)}>
                 <HiOutlineArrowLeft /> Back to Jobs
             </div>
 

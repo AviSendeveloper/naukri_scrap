@@ -34,9 +34,7 @@ function matchSkills(jobSkills, configSkills) {
 
     return jobSkills.filter(skill => {
         const normalizedSkill = skill.toLowerCase().trim();
-        return normalizedConfigSkills.some(configSkill =>
-            normalizedSkill.includes(configSkill) || configSkill.includes(normalizedSkill)
-        );
+        return normalizedConfigSkills.includes(normalizedSkill);
     });
 }
 
