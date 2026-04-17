@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useState, useEffect, useCallback, useRef } from 'react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import {
     HiOutlineSearch,
     HiOutlineFilter,
@@ -15,11 +15,15 @@ const ITEMS_PER_PAGE = 10
 
 export default function Jobs() {
     const navigate = useNavigate()
+    const [searchParams, setSearchParams] = useSearchParams()
 
     // Filter state
-    const [search, setSearch] = useState('')
-    const [keywordFilter, setKeywordFilter] = useState('')
-    const [currentPage, setCurrentPage] = useState(1)
+    const [search, setSearch] = useState(searchParams.get('search') || '')
+    const [keywordFilter, setKeywordFilter] = useState(searchParams.get('keyword') || '')
+    const [currentPage, setCurrentPage] = useState(parseInt(searchParams.get('page')) || 1)
+
+    // Track previous filter values to distinguish user interaction from initial mount/navigation
+    const prevFiltersRef = useRef({ debouncedSearch: searchParams.get('search') || '', keywordFilter: searchParams.get('keyword') || '' })
 
     // Data state
     const [jobs, setJobs] = useState([])
@@ -62,9 +66,13 @@ export default function Jobs() {
         loadJobs()
     }, [loadJobs])
 
-    // Reset page when filters change
+    // Reset page to 1 only when filters actually change (user interaction), not on initial mount
     useEffect(() => {
-        setCurrentPage(1)
+        const prev = prevFiltersRef.current
+        if (prev.debouncedSearch !== debouncedSearch || prev.keywordFilter !== keywordFilter) {
+            setCurrentPage(1)
+        }
+        prevFiltersRef.current = { debouncedSearch, keywordFilter }
     }, [debouncedSearch, keywordFilter])
 
     const totalPages = pagination?.totalPages || 1
@@ -85,6 +93,15 @@ export default function Jobs() {
             }
         }
         return pages
+    }
+
+    const handlePageChange = (newPage) => {
+        setCurrentPage(newPage);
+        setSearchParams({ 
+            page: newPage, 
+            // search, 
+            // keyword: keywordFilter 
+        })
     }
 
     return (
@@ -199,7 +216,7 @@ export default function Jobs() {
                             <button
                                 className="pagination-btn"
                                 disabled={currentPage === 1}
-                                onClick={() => setCurrentPage(p => p - 1)}
+                                onClick={() => handlePageChange(currentPage - 1)}
                             >
                                 <HiOutlineChevronLeft />
                             </button>
@@ -210,7 +227,7 @@ export default function Jobs() {
                                     <button
                                         key={item}
                                         className={`pagination-btn ${item === currentPage ? 'active' : ''}`}
-                                        onClick={() => setCurrentPage(item)}
+                                        onClick={() => handlePageChange(item)}
                                     >
                                         {item}
                                     </button>
@@ -219,7 +236,7 @@ export default function Jobs() {
                             <button
                                 className="pagination-btn"
                                 disabled={currentPage === totalPages}
-                                onClick={() => setCurrentPage(p => p + 1)}
+                                onClick={() => handlePageChange(currentPage+ 1)}
                             >
                                 <HiOutlineChevronRight />
                             </button>

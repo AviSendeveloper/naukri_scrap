@@ -107,8 +107,8 @@ services:
       - "27016:27017"
     environment:
       MONGODB_URI: "mongodb://mongo:27016/naukri_jobs"
-    # volumes:
-    #   - mongo-data:/data/db
+    volumes:
+      - mongo-data:/data/db
     healthcheck:
       test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
       interval: 10s
@@ -124,5 +124,5 @@ networks:
 volumes:
   redis-data:
     driver: local
-  # mongo-data:
-  #   driver: local
+  mongo-data:
+    driver: local
