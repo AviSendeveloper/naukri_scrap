@@ -173,7 +173,15 @@ export default function Jobs() {
                                         <td style={{ whiteSpace: 'nowrap' }}>{job.location?.split(',')[0]}</td>
                                         <td><span className="tag neutral">{job.experience}</span></td>
                                         <td>
-                                            <span className="tag primary">{job.searchKeyword}</span>
+                                            <div className="tags-list">
+                                                {(job.searchKeyword || []).slice(0, 3).map(s => (
+                                                    <span key={s} className="tag primary">{s}</span>
+                                                ))}
+                                                {(job.searchKeyword || []).length > 3 && (
+                                                    <span className="tag neutral">+{job.searchKeyword.length - 3}</span>
+                                                )}
+                                            </div>
+                                            {/* <span className="tag primary">{job.searchKeyword}</span> */}
                                         </td>
                                         <td>
                                             <div className="tags-list">

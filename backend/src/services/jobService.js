@@ -17,7 +17,7 @@ async function getJobs({ page = 1, limit = 20, search = '', keyword = '' } = {})
     const conditions = [];
 
     if (keyword) {
-        conditions.push({ searchKeyword: new RegExp(`^${keyword}$`, 'i') });
+        conditions.push({ searchKeyword: { $in: [keyword] } });
     }
     if (search) {
         conditions.push({ title: new RegExp(search, 'i') });

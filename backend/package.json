@@ -13,7 +13,7 @@
     "stats": "node src/cli.js stats",
     "worker": "node src/workers/index.js",
     "api": "node src/index.js",
-    "dev-api": "nodemon src/index.js"
+    "dev-api": "nodemon -L src/index.js"
   },
   "keywords": [
     "naukri",

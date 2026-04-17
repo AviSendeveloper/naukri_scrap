@@ -100,9 +100,8 @@ const jobSchema = new mongoose.Schema({
 
     // Scraping metadata
     searchKeyword: {
-        type: String,
+        type: Array,
         required: true,
-        trim: true
     },
     scrapedAt: {
         type: Date,

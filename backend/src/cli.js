@@ -324,7 +324,7 @@ async function runOptimizedScrape() {
                     try {
                         await jobQueue.add('scrape-job-detail', {
                             jobUrl: job.jobUrl,
-                            searchKeyword: combinedKeywordStr,
+                            searchKeyword: keywords,
                             pageNumber: pageNum,
                             configSkills: skills,
                             experienceFilter: experienceLabel,
