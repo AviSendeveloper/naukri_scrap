@@ -87,6 +87,7 @@ async function getDashboardData() {
         Job.find().sort({ createdAt: -1 }).limit(6).lean(),
         // Aggregation: jobs per keyword
         Job.aggregate([
+            { $unwind: "$searchKeyword" },
             { $group: { _id: '$searchKeyword', count: { $sum: 1 } } },
             { $sort: { count: -1 } },
             { $project: { keyword: '$_id', count: 1, _id: 0 } },
@@ -104,6 +105,7 @@ async function getDashboardData() {
     // Derive recent activity from the last few scraping batches
     const recentActivity = await Job.aggregate([
         { $sort: { scrapedAt: -1 } },
+        { $unwind: "$searchKeyword" },
         {
             $group: {
                 _id: {
@@ -158,6 +160,7 @@ async function getAnalyticsData() {
 
         // Jobs by keyword
         Job.aggregate([
+            { $unwind: "$searchKeyword" },
             { $group: { _id: '$searchKeyword', count: { $sum: 1 } } },
             { $sort: { count: -1 } },
             { $project: { keyword: '$_id', count: 1, _id: 0 } },
