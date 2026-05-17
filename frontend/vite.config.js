@@ -9,7 +9,7 @@ export default defineConfig({
         },
         host: true, // Necessary for Docker to expose the port
         strictPort: true,
-        port: 5000,
+        port: 5001,
         open: true
     }
 })

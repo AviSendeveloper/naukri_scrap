@@ -92,6 +92,25 @@ const jobSchema = new mongoose.Schema({
         min: 0,
         max: 100
     },
+
+    // AI-based match scoring (new — does NOT modify existing matchPercentage)
+    aiMatchPercentage: {
+        type: Number,
+        default: null,
+        min: 0,
+        max: 100
+    },
+    aiReasoning: {
+        type: String,
+        default: null,
+        trim: true
+    },
+    aiMatchStatus: {
+        type: String,
+        default: 'pending',
+        enum: ['pending', 'done', 'failed']
+    },
+
     experienceFilter: {
         type: String,
         trim: true,

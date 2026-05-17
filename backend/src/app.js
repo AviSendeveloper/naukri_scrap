@@ -8,6 +8,7 @@ const analyticsRoutes = require('./routes/analyticsRoutes');
 const configRoutes = require('./routes/configRoutes');
 const resumeRoutes = require('./routes/resumeRoutes');
 const scraperStatsRoutes = require('./routes/scraperStatsRoutes');
+const resumeUploadRoutes = require('./routes/resumeUpload');
 
 const app = express();
 
@@ -42,6 +43,7 @@ app.use('/api/analytics', analyticsRoutes);
 app.use('/api/config', configRoutes);
 app.use('/api/resumes', resumeRoutes);
 app.use('/api/scraper-stats', scraperStatsRoutes);
+app.use('/api/resume', resumeUploadRoutes);
 
 // Health check
 app.get('/health', (_req, res) => {

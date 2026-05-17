@@ -62,6 +62,23 @@ const scraperConfigSchema = new mongoose.Schema({
         min: 1,
         max: 365,
     },
+
+    // AI provider settings
+    ai_provider: {
+        type: String,
+        default: 'ollama',
+        enum: ['ollama', 'openai', 'anthropic'],
+    },
+    ai_model: {
+        type: String,
+        default: 'qwen2.5:7b',
+        trim: true,
+    },
+    ai_api_key: {
+        type: String,
+        default: null,
+        trim: true,
+    },
 }, {
     timestamps: true,
 });
@@ -95,6 +112,9 @@ scraperConfigSchema.statics.upsertConfig = async function (data) {
     if (data.totalExperience !== undefined) update.totalExperience = data.totalExperience;
     if (data.preferredLocations !== undefined) update.preferredLocations = data.preferredLocations;
     if (data.thresholdDays !== undefined) update.thresholdDays = data.thresholdDays;
+    if (data.ai_provider !== undefined) update.ai_provider = data.ai_provider;
+    if (data.ai_model !== undefined) update.ai_model = data.ai_model;
+    if (data.ai_api_key !== undefined) update.ai_api_key = data.ai_api_key;
 
     const config = await this.findOneAndUpdate(
         { configId: 'default' },

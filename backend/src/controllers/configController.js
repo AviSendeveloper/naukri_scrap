@@ -1,4 +1,5 @@
 const configService = require('../services/configService');
+const { encrypt } = require('../utils/encryption');
 
 /**
  * GET /api/config
@@ -22,7 +23,8 @@ async function updateConfig(req, res) {
     try {
         const {
             keywords, skills, experience, scraping,
-            resumeScheduleTime, totalExperience, preferredLocations, thresholdDays
+            resumeScheduleTime, totalExperience, preferredLocations, thresholdDays,
+            ai_provider, ai_model, ai_api_key
         } = req.body;
 
         // Basic validation
@@ -35,11 +37,21 @@ async function updateConfig(req, res) {
         if (preferredLocations !== undefined && !Array.isArray(preferredLocations)) {
             return res.status(400).json({ success: false, message: 'preferredLocations must be an array' });
         }
+        if (ai_provider !== undefined && !['ollama', 'openai', 'anthropic'].includes(ai_provider)) {
+            return res.status(400).json({ success: false, message: 'ai_provider must be ollama, openai, or anthropic' });
+        }
 
-        const updated = await configService.updateConfig({
+        // Encrypt AI API key before storing
+        const updateData = {
             keywords, skills, experience, scraping,
-            resumeScheduleTime, totalExperience, preferredLocations, thresholdDays
-        });
+            resumeScheduleTime, totalExperience, preferredLocations, thresholdDays,
+            ai_provider, ai_model,
+        };
+        if (ai_api_key !== undefined) {
+            updateData.ai_api_key = ai_api_key ? encrypt(ai_api_key) : null;
+        }
+
+        const updated = await configService.updateConfig(updateData);
 
         // If scheduler time changed, reschedule the cron job
         if (resumeScheduleTime !== undefined) {

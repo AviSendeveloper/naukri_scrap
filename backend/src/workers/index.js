@@ -8,6 +8,7 @@ const { getRedisConnection, REDIS_KEYS } = require('../config/redis');
 const { JOB_QUEUE_NAME } = require('../config/queue');
 const { connectDB, closeDB } = require('../config/database');
 const { processJob, closeSharedBrowser } = require('./jobProcessor');
+const { startAIMatchWorker } = require('./aiMatchWorker');
 
 /**
  * Boot the BullMQ worker process.
@@ -65,14 +66,18 @@ async function startWorker() {
 
     console.log(chalk.blue(`⏳ Worker started, listening for jobs on "${JOB_QUEUE_NAME}"...\n`));
 
+    // 4. Start AI match worker (Queue 2)
+    const aiWorker = await startAIMatchWorker();
+
     // ── Graceful shutdown ──────────────────────────────────────────────────
     const shutdown = async (signal) => {
         console.log(chalk.yellow(`\n🛑 Received ${signal}, shutting down gracefully...`));
         await worker.close();
+        await aiWorker.close();
         await closeSharedBrowser();
         await closeDB();
         connection.disconnect();
-        console.log(chalk.green('✅ Worker shut down cleanly'));
+        console.log(chalk.green('✅ Workers shut down cleanly'));
         process.exit(0);
     };
 

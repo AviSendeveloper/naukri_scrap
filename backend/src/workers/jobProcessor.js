@@ -1,6 +1,7 @@
 const puppeteer = require('puppeteer');
 const Job = require('../models/Job');
 const FailedJob = require('../models/FailedJob');
+const { dispatchAIMatchJob } = require('../queues/aiMatchQueue');
 
 // List of user agents for rotation
 const USER_AGENTS = [
@@ -319,17 +320,31 @@ async function processJob(queueJob) {
             matchPercentage: matchPct,
             experienceFilter,
 
+            // AI match fields (initialised as pending, scored async by Queue 2)
+            aiMatchPercentage: null,
+            aiReasoning: null,
+            aiMatchStatus: 'pending',
+
             scrapedAt: new Date(),
         };
 
         // 3. Upsert into MongoDB
-        await Job.findOneAndUpdate(
+        const savedJob = await Job.findOneAndUpdate(
             { jobUrl },
             jobDoc,
             { upsert: true, new: true, setDefaultsOnInsert: true }
         );
 
         console.log(`  ✅ Saved: ${basicDetails.title} (match: ${matchPct}%)`);
+
+        // 4. Dispatch to AI match queue for async AI scoring
+        try {
+            await dispatchAIMatchJob(savedJob._id.toString());
+        } catch (dispatchErr) {
+            // Non-fatal: don't fail the scrape job because of queue dispatch failure
+            console.error(`  ⚠️  AI queue dispatch failed: ${dispatchErr.message}`);
+        }
+
         return { status: 'saved', matchPercentage: matchPct };
 
     } catch (error) {
