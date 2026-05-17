@@ -1,0 +1,33 @@
+# ========================================
+# Dockerfile.ai-worker - AI Match Worker Process
+# Consumes Queue 2 (naukri-ai-match) and runs
+# AI-based job match scoring via Ollama/OpenAI/Anthropic.
+#
+# Unlike the scraping worker, this container does NOT
+# need Chromium/Puppeteer — it only does DB reads,
+# AI API calls, and DB writes. This keeps the image
+# lean (~200MB vs ~800MB for the scraping worker).
+# ========================================
+
+FROM node:24-bookworm-slim
+
+WORKDIR /app
+
+# No Chromium needed — this worker only makes HTTP calls
+# to AI providers (Ollama/OpenAI/Anthropic) and MongoDB.
+
+# Install dependencies first (leverages Docker layer caching)
+COPY package.json package-lock.json ./
+RUN npm ci --omit=dev
+
+# Copy application source
+COPY . .
+
+# No port to expose — this is a pure background worker
+
+# Health check: verify the Node process is alive
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
+    CMD node -e "process.exit(0)" || exit 1
+
+# Start the AI match worker
+CMD ["npm", "run", "ai-worker"]

@@ -2,11 +2,12 @@
 # Docker Compose — NaukriScrap
 # ========================================
 # Services:
-#   api      — Backend Express API
-#   frontend — React/Vite frontend (nginx)
-#   redis    — Redis Stack (cache + BullMQ broker)
-#   worker   — BullMQ workers (4 replicas)
-#   db       — MongoDB (commented — using cloud Atlas)
+#   api       — Backend Express API
+#   frontend  — React/Vite frontend (nginx)
+#   redis     — Redis Stack (cache + BullMQ broker)
+#   worker    — BullMQ scraping workers (4 replicas)
+#   ai-worker — AI match scoring worker (Queue 2)
+#   db        — MongoDB
 # ========================================
 
 services:
@@ -55,8 +56,37 @@ services:
       - NODE_ENV=dev
       - REDIS_URL=redis://redis:6379
       - MONGODB_URI=mongodb://db:27017/naukri_jobs
+      - SKIP_AI_WORKER=true
     depends_on:
       redis:
+        condition: service_healthy
+    networks:
+      - naukri-network
+
+  # ---- AI Match Worker (Queue 2) ----
+  ai-worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.ai-worker
+    container_name: naukri-ai-worker
+    restart: unless-stopped
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+    env_file:
+      - ./backend/.env
+    environment:
+      - NODE_ENV=dev
+      - REDIS_URL=redis://redis:6379
+      - MONGODB_URI=mongodb://db:27017/naukri_jobs
+      - OLLAMA_URL=http://host.docker.internal:1234
+      - OLLAMA_MODEL=qwen/qwen2.5-vl-7b
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      redis:
+        condition: service_healthy
+      db:
         condition: service_healthy
     networks:
       - naukri-network

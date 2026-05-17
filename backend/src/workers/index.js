@@ -66,14 +66,19 @@ async function startWorker() {
 
     console.log(chalk.blue(`⏳ Worker started, listening for jobs on "${JOB_QUEUE_NAME}"...\n`));
 
-    // 4. Start AI match worker (Queue 2)
-    const aiWorker = await startAIMatchWorker();
+    // 4. Start AI match worker (Queue 2) — unless running in Docker with a separate ai-worker container
+    let aiWorker = null;
+    if (process.env.SKIP_AI_WORKER !== 'true') {
+        aiWorker = await startAIMatchWorker();
+    } else {
+        console.log(chalk.gray('⏭️  AI match worker skipped (SKIP_AI_WORKER=true, running in separate container)'));
+    }
 
     // ── Graceful shutdown ──────────────────────────────────────────────────
     const shutdown = async (signal) => {
         console.log(chalk.yellow(`\n🛑 Received ${signal}, shutting down gracefully...`));
         await worker.close();
-        await aiWorker.close();
+        if (aiWorker) await aiWorker.close();
         await closeSharedBrowser();
         await closeDB();
         connection.disconnect();

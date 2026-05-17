@@ -12,6 +12,7 @@
     "list": "node src/cli.js list",
     "stats": "node src/cli.js stats",
     "worker": "node src/workers/index.js",
+    "ai-worker": "node src/workers/aiWorkerIndex.js",
     "api": "node src/index.js",
     "dev-api": "nodemon -L src/index.js"
   },
