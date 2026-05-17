@@ -10,6 +10,6 @@ export default defineConfig({
         host: true, // Necessary for Docker to expose the port
         strictPort: true,
         port: 5001,
-        open: true
+        open: !process.env.DOCKER
     }
 })

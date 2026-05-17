@@ -99,12 +99,13 @@ services:
     container_name: naukri-frontend
     restart: unless-stopped
     ports:
-      - "5001:5000"
+      - "5001:5001"
     volumes:
       - ./frontend:/app
       - /app/node_modules
     environment:
       - VITE_API_BASE=http://localhost:3000/api
+      - DOCKER=true
     depends_on:
       - api
     networks:

@@ -6,14 +6,15 @@ const DEFAULT_BASE_URL = 'http://localhost:11434';
 const REQUEST_TIMEOUT_MS = 30000;
 
 /**
- * AI provider that uses a locally running Ollama instance.
- * Communicates via Ollama's REST API at /api/generate.
+ * AI provider for local inference servers (Ollama, LM Studio, etc.).
+ * Uses the OpenAI-compatible /v1/chat/completions endpoint which is
+ * supported by both Ollama and LM Studio.
  */
 class OllamaProvider extends BaseAIProvider {
     /**
      * @param {Object}  opts
-     * @param {string}  [opts.model]   – Ollama model name (default: qwen2.5:7b)
-     * @param {string}  [opts.baseUrl] – Ollama server URL (default: http://localhost:11434)
+     * @param {string}  [opts.model]   – model name (default: qwen2.5:7b)
+     * @param {string}  [opts.baseUrl] – server URL (default: http://localhost:11434)
      */
     constructor({ model, baseUrl } = {}) {
         super();
@@ -22,8 +23,8 @@ class OllamaProvider extends BaseAIProvider {
     }
 
     /**
-     * Send a prompt to Ollama and get parsed JSON back.
-     * Uses Ollama's native JSON mode (`format: 'json'`) which guarantees valid JSON.
+     * Send a prompt to the local AI server via the OpenAI-compatible
+     * /v1/chat/completions endpoint and get parsed JSON back.
      *
      * @param {string} prompt
      * @returns {Promise<Object>} parsed JSON response
@@ -34,14 +35,23 @@ class OllamaProvider extends BaseAIProvider {
         const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
         try {
-            const response = await fetch(`${this.baseUrl}/api/generate`, {
+            const response = await fetch(`${this.baseUrl}/v1/chat/completions`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     model: this.model,
-                    prompt,
+                    messages: [
+                        {
+                            role: 'system',
+                            content: 'Respond only with valid JSON. No markdown, no explanation, no preamble.',
+                        },
+                        {
+                            role: 'user',
+                            content: prompt,
+                        },
+                    ],
+                    temperature: 0.3,
                     stream: false,
-                    format: 'json',
                 }),
                 signal: controller.signal,
             });
@@ -49,21 +59,24 @@ class OllamaProvider extends BaseAIProvider {
             if (!response.ok) {
                 const errorText = await response.text().catch(() => 'Unknown error');
                 throw new Error(
-                    `Ollama API error (${response.status}): ${errorText}`
+                    `Local AI API error (${response.status}): ${errorText}`
                 );
             }
 
             const data = await response.json();
+            const content = data.choices?.[0]?.message?.content;
 
-            if (!data.response) {
-                throw new Error('Ollama returned an empty response');
+            if (!content) {
+                throw new Error('Local AI server returned an empty response');
             }
 
-            return JSON.parse(data.response);
+            // Strip markdown fences if present
+            const cleaned = content.replace(/```json|```/g, '').trim();
+            return JSON.parse(cleaned);
         } catch (error) {
             if (error.name === 'AbortError') {
                 throw new Error(
-                    `Ollama request timed out after ${REQUEST_TIMEOUT_MS / 1000}s`
+                    `Local AI request timed out after ${REQUEST_TIMEOUT_MS / 1000}s`
                 );
             }
             throw error;
