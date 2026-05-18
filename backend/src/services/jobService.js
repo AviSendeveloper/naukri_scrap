@@ -1,15 +1,23 @@
 const Job = require('../models/Job');
 
 /**
- * Fetch paginated jobs with optional filters.
+ * Fetch paginated jobs with optional filters and sorting.
  * @param {Object} params
  * @param {number} params.page
  * @param {number} params.limit
  * @param {string} [params.search] - Title search (regex)
  * @param {string} [params.keyword] - Exact searchKeyword match
+ * @param {number|null} [params.minAiMatch] - Minimum AI match percentage filter
+ * @param {number|null} [params.minManualMatch] - Minimum manual match percentage filter
+ * @param {string} [params.sortBy] - Column to sort by ('aiMatchPercentage' | 'matchPercentage')
+ * @param {string} [params.sortOrder] - Sort direction ('asc' | 'desc')
  * @returns {Promise<{ jobs: Array, pagination: Object }>}
  */
-async function getJobs({ page = 1, limit = 20, search = '', keyword = '' } = {}) {
+async function getJobs({
+    page = 1, limit = 20, search = '', keyword = '',
+    minAiMatch = null, minManualMatch = null,
+    sortBy = '', sortOrder = 'desc'
+} = {}) {
     const safePage = Math.max(1, page);
     const safeLimit = Math.min(100, Math.max(1, limit));
 
@@ -22,14 +30,43 @@ async function getJobs({ page = 1, limit = 20, search = '', keyword = '' } = {})
     if (search) {
         conditions.push({ title: new RegExp(search, 'i') });
     }
+
+    // AI match filter (preferred — applied first)
+    if (minAiMatch !== null && minAiMatch !== undefined) {
+        conditions.push({ aiMatchPercentage: { $gte: minAiMatch } });
+    }
+
+    // Manual match filter (applied simultaneously)
+    if (minManualMatch !== null && minManualMatch !== undefined) {
+        conditions.push({ matchPercentage: { $gte: minManualMatch } });
+    }
+
     if (conditions.length > 0) {
         filter = conditions.length === 1 ? conditions[0] : { $and: conditions };
     }
 
+    // Build dynamic sort order
+    // Priority: explicit sortBy > filter-driven auto-sort > default createdAt
+    const validSortColumns = ['aiMatchPercentage', 'matchPercentage'];
+    const sortDirection = sortOrder === 'asc' ? 1 : -1;
+    let sort = {};
+
+    if (sortBy && validSortColumns.includes(sortBy)) {
+        // Explicit user-driven column sort (highest priority)
+        sort[sortBy] = sortDirection;
+    } else if (minAiMatch !== null && minAiMatch !== undefined) {
+        // AI filter active — auto-sort by AI match descending
+        sort.aiMatchPercentage = -1;
+    } else if (minManualMatch !== null && minManualMatch !== undefined) {
+        // Manual filter active — auto-sort by manual match descending
+        sort.matchPercentage = -1;
+    }
+    sort.createdAt = -1; // always fallback
+
     const skip = (safePage - 1) * safeLimit;
 
     const [jobs, totalJobs] = await Promise.all([
-        Job.find(filter).sort({ createdAt: -1 }).skip(skip).limit(safeLimit).lean(),
+        Job.find(filter).sort(sort).skip(skip).limit(safeLimit).lean(),
         Job.countDocuments(filter),
     ]);
 

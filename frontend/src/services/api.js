@@ -1,18 +1,30 @@
 const API_BASE = import.meta.env.VITE_API_BASE;
 
 /**
- * Fetch paginated jobs list with optional search and keyword filter.
+ * Fetch paginated jobs list with optional search, keyword filter, match filters, and sorting.
  * @param {Object} params
  * @param {number} params.page
  * @param {number} params.limit
  * @param {string} [params.search]
  * @param {string} [params.keyword]
+ * @param {string|number} [params.minAiMatch] - Minimum AI match percentage
+ * @param {string|number} [params.minManualMatch] - Minimum manual match percentage
+ * @param {string} [params.sortBy] - Column to sort by
+ * @param {string} [params.sortOrder] - Sort direction ('asc' | 'desc')
  * @returns {Promise<{ data: Array, pagination: Object }>}
  */
-export async function fetchJobs({ page = 1, limit = 10, search = '', keyword = '' } = {}) {
+export async function fetchJobs({
+    page = 1, limit = 10, search = '', keyword = '',
+    minAiMatch = '', minManualMatch = '',
+    sortBy = '', sortOrder = ''
+} = {}) {
     const params = new URLSearchParams({ page, limit });
     if (search) params.append('search', search);
     if (keyword) params.append('keyword', keyword);
+    if (minAiMatch) params.append('minAiMatch', minAiMatch);
+    if (minManualMatch) params.append('minManualMatch', minManualMatch);
+    if (sortBy) params.append('sortBy', sortBy);
+    if (sortOrder) params.append('sortOrder', sortOrder);
 
     const res = await fetch(`${API_BASE}/jobs?${params}`);
     if (!res.ok) throw new Error('Failed to fetch jobs');

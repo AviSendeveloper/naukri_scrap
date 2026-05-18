@@ -611,6 +611,7 @@ a:hover {
 
 .tag.primary   { background: var(--accent-primary-muted); color: var(--accent-primary-hover); }
 .tag.secondary { background: var(--accent-secondary-muted); color: var(--accent-secondary); }
+.tag.success   { background: var(--accent-secondary-muted); color: var(--accent-secondary); }
 .tag.warning   { background: var(--accent-warning-muted); color: var(--accent-warning); }
 .tag.danger    { background: var(--accent-danger-muted); color: var(--accent-danger); }
 .tag.info      { background: var(--accent-info-muted); color: var(--accent-info); }
@@ -620,6 +621,17 @@ a:hover {
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-2);
+}
+
+/* Sortable Column Headers */
+.sortable-header {
+  cursor: pointer;
+  user-select: none;
+  transition: color var(--transition-fast);
+}
+
+.sortable-header:hover {
+  color: var(--accent-primary);
 }
 
 /* ===================================

@@ -5,13 +5,35 @@ import {
     HiOutlineFilter,
     HiOutlineExternalLink,
     HiOutlineChevronLeft,
-    HiOutlineChevronRight
+    HiOutlineChevronRight,
+    HiOutlineChevronUp,
+    HiOutlineChevronDown,
+    HiOutlineSortDescending
 } from 'react-icons/hi'
 import { fetchJobs, fetchKeywords } from '../services/api'
 import useDebounce from '../hooks/useDebounce'
 import Loader from '../components/Loader'
 
 const ITEMS_PER_PAGE = 10
+
+const MATCH_FILTER_OPTIONS = [
+    { label: 'All', value: '' },
+    { label: '≥ 80%', value: '80' },
+    { label: '≥ 60%', value: '60' },
+    { label: '≥ 40%', value: '40' },
+    { label: '≥ 20%', value: '20' },
+    { label: '> 0%', value: '1' },
+]
+
+/**
+ * Returns a color class for a match percentage value.
+ */
+function getMatchColor(value) {
+    if (value == null) return 'neutral'
+    if (value >= 70) return 'success'
+    if (value >= 40) return 'warning'
+    return 'danger'
+}
 
 export default function Jobs() {
     const navigate = useNavigate()
@@ -20,10 +42,23 @@ export default function Jobs() {
     // Filter state
     const [search, setSearch] = useState(searchParams.get('search') || '')
     const [keywordFilter, setKeywordFilter] = useState(searchParams.get('keyword') || '')
+    const [aiMatchFilter, setAiMatchFilter] = useState(searchParams.get('minAiMatch') || '')
+    const [manualMatchFilter, setManualMatchFilter] = useState(searchParams.get('minManualMatch') || '')
     const [currentPage, setCurrentPage] = useState(parseInt(searchParams.get('page')) || 1)
 
-    // Track previous filter values to distinguish user interaction from initial mount/navigation
-    const prevFiltersRef = useRef({ debouncedSearch: searchParams.get('search') || '', keywordFilter: searchParams.get('keyword') || '' })
+    // Sort state
+    const [sortBy, setSortBy] = useState(searchParams.get('sortBy') || '')
+    const [sortOrder, setSortOrder] = useState(searchParams.get('sortOrder') || 'desc')
+
+    // Track previous filter/sort values to distinguish user interaction from initial mount/navigation
+    const prevFiltersRef = useRef({
+        debouncedSearch: searchParams.get('search') || '',
+        keywordFilter: searchParams.get('keyword') || '',
+        aiMatchFilter: searchParams.get('minAiMatch') || '',
+        manualMatchFilter: searchParams.get('minManualMatch') || '',
+        sortBy: searchParams.get('sortBy') || '',
+        sortOrder: searchParams.get('sortOrder') || 'desc',
+    })
 
     // Data state
     const [jobs, setJobs] = useState([])
@@ -41,7 +76,7 @@ export default function Jobs() {
             .catch(err => console.error('Failed to load keywords:', err))
     }, [])
 
-    // Fetch jobs whenever page, debouncedSearch, or keyword filter changes
+    // Fetch jobs whenever page, debouncedSearch, keyword, match filters, or sort changes
     const loadJobs = useCallback(async () => {
         setIsLoading(true)
         try {
@@ -49,7 +84,11 @@ export default function Jobs() {
                 page: currentPage,
                 limit: ITEMS_PER_PAGE,
                 search: debouncedSearch,
-                keyword: keywordFilter
+                keyword: keywordFilter,
+                minAiMatch: aiMatchFilter,
+                minManualMatch: manualMatchFilter,
+                sortBy,
+                sortOrder
             })
             setJobs(res.data || [])
             setPagination(res.pagination || null)
@@ -60,20 +99,31 @@ export default function Jobs() {
         } finally {
             setIsLoading(false)
         }
-    }, [currentPage, debouncedSearch, keywordFilter])
+    }, [currentPage, debouncedSearch, keywordFilter, aiMatchFilter, manualMatchFilter, sortBy, sortOrder])
 
     useEffect(() => {
         loadJobs()
     }, [loadJobs])
 
-    // Reset page to 1 only when filters actually change (user interaction), not on initial mount
+    // Reset page to 1 only when filters/sort actually change (user interaction), not on initial mount
     useEffect(() => {
         const prev = prevFiltersRef.current
-        if (prev.debouncedSearch !== debouncedSearch || prev.keywordFilter !== keywordFilter) {
+        if (
+            prev.debouncedSearch !== debouncedSearch ||
+            prev.keywordFilter !== keywordFilter ||
+            prev.aiMatchFilter !== aiMatchFilter ||
+            prev.manualMatchFilter !== manualMatchFilter ||
+            prev.sortBy !== sortBy ||
+            prev.sortOrder !== sortOrder
+        ) {
             setCurrentPage(1)
         }
-        prevFiltersRef.current = { debouncedSearch, keywordFilter }
-    }, [debouncedSearch, keywordFilter])
+        prevFiltersRef.current = {
+            debouncedSearch, keywordFilter,
+            aiMatchFilter, manualMatchFilter,
+            sortBy, sortOrder
+        }
+    }, [debouncedSearch, keywordFilter, aiMatchFilter, manualMatchFilter, sortBy, sortOrder])
 
     const totalPages = pagination?.totalPages || 1
     const totalJobs = pagination?.totalJobs || 0
@@ -102,6 +152,27 @@ export default function Jobs() {
             // search, 
             // keyword: keywordFilter 
         })
+    }
+
+    // Sort handler for clickable column headers
+    const handleSort = (column) => {
+        if (sortBy === column) {
+            // Toggle direction
+            setSortOrder(prev => prev === 'desc' ? 'asc' : 'desc')
+        } else {
+            setSortBy(column)
+            setSortOrder('desc')
+        }
+    }
+
+    // Render sort indicator arrow
+    const renderSortIndicator = (column) => {
+        if (sortBy !== column) {
+            return <HiOutlineSortDescending style={{ opacity: 0.3, marginLeft: '4px', verticalAlign: 'middle' }} />
+        }
+        return sortOrder === 'asc'
+            ? <HiOutlineChevronUp style={{ marginLeft: '4px', verticalAlign: 'middle', color: 'var(--accent-primary)' }} />
+            : <HiOutlineChevronDown style={{ marginLeft: '4px', verticalAlign: 'middle', color: 'var(--accent-primary)' }} />
     }
 
     return (
@@ -139,6 +210,32 @@ export default function Jobs() {
                         <option key={kw} value={kw}>{kw}</option>
                     ))}
                 </select>
+
+                <select
+                    id="ai-match-filter"
+                    className="form-select"
+                    style={{ width: 'auto', minWidth: '150px' }}
+                    value={aiMatchFilter}
+                    onChange={(e) => setAiMatchFilter(e.target.value)}
+                >
+                    <option value="">AI Match: All</option>
+                    {MATCH_FILTER_OPTIONS.slice(1).map(opt => (
+                        <option key={`ai-${opt.value}`} value={opt.value}>AI {opt.label}</option>
+                    ))}
+                </select>
+
+                <select
+                    id="manual-match-filter"
+                    className="form-select"
+                    style={{ width: 'auto', minWidth: '170px' }}
+                    value={manualMatchFilter}
+                    onChange={(e) => setManualMatchFilter(e.target.value)}
+                >
+                    <option value="">Manual Match: All</option>
+                    {MATCH_FILTER_OPTIONS.slice(1).map(opt => (
+                        <option key={`manual-${opt.value}`} value={opt.value}>Manual {opt.label}</option>
+                    ))}
+                </select>
             </div>
 
             {/* Jobs Table */}
@@ -159,6 +256,20 @@ export default function Jobs() {
                                     <th>Experience</th>
                                     <th>Search Keyword</th>
                                     <th>Skills Match</th>
+                                    <th
+                                        className="sortable-header"
+                                        onClick={() => handleSort('matchPercentage')}
+                                        title="Sort by Manual Match %"
+                                    >
+                                        Manual % {renderSortIndicator('matchPercentage')}
+                                    </th>
+                                    <th
+                                        className="sortable-header"
+                                        onClick={() => handleSort('aiMatchPercentage')}
+                                        title="Sort by AI Match %"
+                                    >
+                                        AI % {renderSortIndicator('aiMatchPercentage')}
+                                    </th>
                                     <th>Posted</th>
                                     <th></th>
                                 </tr>
@@ -192,6 +303,24 @@ export default function Jobs() {
                                                     <span className="tag neutral">+{job.matchedSkills.length - 3}</span>
                                                 )}
                                             </div>
+                                        </td>
+                                        {/* Manual Match % */}
+                                        <td style={{ textAlign: 'center' }}>
+                                            <span className={`tag ${getMatchColor(job.matchPercentage)}`}>
+                                                {job.matchPercentage != null ? `${job.matchPercentage}%` : '—'}
+                                            </span>
+                                        </td>
+                                        {/* AI Match % */}
+                                        <td style={{ textAlign: 'center' }}>
+                                            {job.aiMatchStatus === 'done' ? (
+                                                <span className={`tag ${getMatchColor(job.aiMatchPercentage)}`}>
+                                                    {job.aiMatchPercentage != null ? `${job.aiMatchPercentage}%` : '—'}
+                                                </span>
+                                            ) : job.aiMatchStatus === 'failed' ? (
+                                                <span className="tag danger" style={{ fontSize: 'var(--font-xs)' }}>Failed</span>
+                                            ) : (
+                                                <span className="tag neutral" style={{ fontSize: 'var(--font-xs)' }}>Pending</span>
+                                            )}
                                         </td>
                                         <td style={{ whiteSpace: 'nowrap', fontSize: 'var(--font-sm)', color: 'var(--text-muted)' }}>
                                             {job.postedDate}

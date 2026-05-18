@@ -2,7 +2,7 @@ const jobService = require('../services/jobService');
 
 /**
  * GET /api/jobs
- * List all jobs with pagination, search, and sorting.
+ * List all jobs with pagination, search, sorting, and match-percentage filters.
  */
 async function getJobs(req, res) {
     try {
@@ -10,8 +10,16 @@ async function getJobs(req, res) {
         const limit = parseInt(req.query.limit, 10) || 20;
         const keyword = req.query.keyword?.trim() || '';
         const search = req.query.search?.trim() || '';
+        const minAiMatch = req.query.minAiMatch ? parseInt(req.query.minAiMatch, 10) : null;
+        const minManualMatch = req.query.minManualMatch ? parseInt(req.query.minManualMatch, 10) : null;
+        const sortBy = req.query.sortBy?.trim() || '';
+        const sortOrder = req.query.sortOrder?.trim() || 'desc';
 
-        const { jobs, pagination } = await jobService.getJobs({ page, limit, keyword, search });
+        const { jobs, pagination } = await jobService.getJobs({
+            page, limit, keyword, search,
+            minAiMatch, minManualMatch,
+            sortBy, sortOrder
+        });
 
         return res.json({ success: true, data: jobs, pagination });
     } catch (error) {
