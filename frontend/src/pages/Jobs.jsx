@@ -8,9 +8,11 @@ import {
     HiOutlineChevronRight,
     HiOutlineChevronUp,
     HiOutlineChevronDown,
-    HiOutlineSortDescending
+    HiOutlineSortDescending,
+    HiOutlineDownload,
+    HiOutlineX
 } from 'react-icons/hi'
-import { fetchJobs, fetchKeywords } from '../services/api'
+import { fetchJobs, fetchKeywords, exportJobs } from '../services/api'
 import useDebounce from '../hooks/useDebounce'
 import Loader from '../components/Loader'
 
@@ -174,6 +176,51 @@ export default function Jobs() {
             ? <HiOutlineChevronUp style={{ marginLeft: '4px', verticalAlign: 'middle', color: 'var(--accent-primary)' }} />
             : <HiOutlineChevronDown style={{ marginLeft: '4px', verticalAlign: 'middle', color: 'var(--accent-primary)' }} />
     }
+    // Export state
+    const today = new Date().toISOString().split('T')[0]
+    const [showExportForm, setShowExportForm] = useState(false)
+    const [exportStartDate, setExportStartDate] = useState(today)
+    const [exportEndDate, setExportEndDate] = useState(today)
+    const [exportStatus, setExportStatus] = useState('idle') // idle | exporting | done | error
+    const [exportMessage, setExportMessage] = useState('')
+
+    // Export handler
+    const handleExport = async () => {
+        setExportStatus('exporting')
+        setExportMessage('')
+        try {
+            const { blob, jobCount, emailSent } = await exportJobs({
+                startDate: exportStartDate,
+                endDate: exportEndDate
+            })
+
+            // Trigger browser download
+            const url = URL.createObjectURL(blob)
+            const a = document.createElement('a')
+            a.href = url
+            a.download = `jobs_export_${exportStartDate}_to_${exportEndDate}.xlsx`
+            document.body.appendChild(a)
+            a.click()
+            document.body.removeChild(a)
+            URL.revokeObjectURL(url)
+
+            setExportStatus('done')
+            setExportMessage(
+                `✓ ${jobCount} jobs exported${emailSent ? ' & emailed' : '. Email not configured — set it in Settings.'}`
+            )
+            setTimeout(() => {
+                setExportStatus('idle')
+                setExportMessage('')
+            }, 4000)
+        } catch (err) {
+            setExportStatus('error')
+            setExportMessage(`Export failed: ${err.message}`)
+            setTimeout(() => {
+                setExportStatus('idle')
+                setExportMessage('')
+            }, 4000)
+        }
+    }
 
     return (
         <div className="animate-in">
@@ -182,10 +229,65 @@ export default function Jobs() {
                     <h2>All Jobs</h2>
                     <p>{totalJobs} jobs found</p>
                 </div>
-                <button className="btn btn-primary">
-                    <HiOutlineFilter /> Export
+                <button
+                    className="btn btn-primary"
+                    onClick={() => setShowExportForm(prev => !prev)}
+                >
+                    {showExportForm ? <HiOutlineX /> : <HiOutlineDownload />}
+                    {showExportForm ? 'Close' : 'Export'}
                 </button>
             </div>
+
+            {/* Export Form */}
+            {showExportForm && (
+                <div className="card" style={{
+                    marginBottom: 'var(--space-6)',
+                    display: 'flex',
+                    alignItems: 'flex-end',
+                    gap: 'var(--space-4)',
+                    flexWrap: 'wrap',
+                    padding: 'var(--space-5) var(--space-6)'
+                }}>
+                    <div className="form-group" style={{ marginBottom: 0 }}>
+                        <label className="form-label">Start Date</label>
+                        <input
+                            className="form-input"
+                            type="date"
+                            value={exportStartDate}
+                            onChange={e => setExportStartDate(e.target.value)}
+                            style={{ width: '180px' }}
+                        />
+                    </div>
+                    <div className="form-group" style={{ marginBottom: 0 }}>
+                        <label className="form-label">End Date</label>
+                        <input
+                            className="form-input"
+                            type="date"
+                            value={exportEndDate}
+                            onChange={e => setExportEndDate(e.target.value)}
+                            style={{ width: '180px' }}
+                        />
+                    </div>
+                    <button
+                        className="btn btn-primary"
+                        onClick={handleExport}
+                        disabled={exportStatus === 'exporting'}
+                        style={{ height: '42px' }}
+                    >
+                        <HiOutlineDownload />
+                        {exportStatus === 'exporting' ? 'Exporting...' : 'Export & Email'}
+                    </button>
+                    {exportMessage && (
+                        <span style={{
+                            fontSize: 'var(--font-sm)',
+                            color: exportStatus === 'error' ? 'var(--accent-danger)' : 'var(--accent-secondary)',
+                            fontWeight: 500
+                        }}>
+                            {exportMessage}
+                        </span>
+                    )}
+                </div>
+            )}
 
             {/* Filters */}
             <div className="filter-bar">

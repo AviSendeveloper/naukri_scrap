@@ -203,3 +203,30 @@ export async function fetchSchedulerLogs(page = 1, limit = 10) {
     return res.json();
 }
 
+// ─── Export API ──────────────────────────────────────────────
+
+/**
+ * Export jobs within a date range as an xlsx file.
+ * Also triggers an email send to the configured export email.
+ * @param {Object} params
+ * @param {string} params.startDate - Start date (YYYY-MM-DD)
+ * @param {string} params.endDate - End date (YYYY-MM-DD)
+ * @returns {Promise<{ blob: Blob, jobCount: number, emailSent: boolean }>}
+ */
+export async function exportJobs({ startDate, endDate }) {
+    const res = await fetch(`${API_BASE}/export`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ startDate, endDate }),
+    });
+    if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.message || 'Failed to export jobs');
+    }
+
+    const jobCount = parseInt(res.headers.get('X-Job-Count') || '0', 10);
+    const emailSent = res.headers.get('X-Email-Sent') === 'true';
+    const blob = await res.blob();
+
+    return { blob, jobCount, emailSent };
+}

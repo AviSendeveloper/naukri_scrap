@@ -9,6 +9,7 @@ const configRoutes = require('./routes/configRoutes');
 const resumeRoutes = require('./routes/resumeRoutes');
 const scraperStatsRoutes = require('./routes/scraperStatsRoutes');
 const resumeUploadRoutes = require('./routes/resumeUpload');
+const exportRoutes = require('./routes/exportRoutes');
 
 const app = express();
 
@@ -30,6 +31,7 @@ app.use(
             }
         },
         credentials: true, // if using cookies/auth
+        exposedHeaders: ['X-Job-Count', 'X-Email-Sent'],
     })
 );
 
@@ -44,6 +46,7 @@ app.use('/api/config', configRoutes);
 app.use('/api/resumes', resumeRoutes);
 app.use('/api/scraper-stats', scraperStatsRoutes);
 app.use('/api/resume', resumeUploadRoutes);
+app.use('/api/export', exportRoutes);
 
 // Health check
 app.get('/health', (_req, res) => {

@@ -79,6 +79,13 @@ const scraperConfigSchema = new mongoose.Schema({
         default: null,
         trim: true,
     },
+
+    // Email address for job export reports
+    exportEmail: {
+        type: String,
+        default: '',
+        trim: true,
+    },
 }, {
     timestamps: true,
 });
@@ -115,6 +122,7 @@ scraperConfigSchema.statics.upsertConfig = async function (data) {
     if (data.ai_provider !== undefined) update.ai_provider = data.ai_provider;
     if (data.ai_model !== undefined) update.ai_model = data.ai_model;
     if (data.ai_api_key !== undefined) update.ai_api_key = data.ai_api_key;
+    if (data.exportEmail !== undefined) update.exportEmail = data.exportEmail;
 
     const config = await this.findOneAndUpdate(
         { configId: 'default' },

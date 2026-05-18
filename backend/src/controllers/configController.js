@@ -24,7 +24,8 @@ async function updateConfig(req, res) {
         const {
             keywords, skills, experience, scraping,
             resumeScheduleTime, totalExperience, preferredLocations, thresholdDays,
-            ai_provider, ai_model, ai_api_key
+            ai_provider, ai_model, ai_api_key,
+            exportEmail
         } = req.body;
 
         // Basic validation
@@ -45,7 +46,7 @@ async function updateConfig(req, res) {
         const updateData = {
             keywords, skills, experience, scraping,
             resumeScheduleTime, totalExperience, preferredLocations, thresholdDays,
-            ai_provider, ai_model,
+            ai_provider, ai_model, exportEmail,
         };
         if (ai_api_key !== undefined) {
             updateData.ai_api_key = ai_api_key ? encrypt(ai_api_key) : null;

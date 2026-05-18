@@ -3,6 +3,7 @@ require('dotenv').config({ quiet: true });
 const app = require('./app');
 const { connectDB } = require('./config/database');
 const { initScheduler } = require('./scheduler/resumeScheduler');
+const { initExportScheduler } = require('./scheduler/exportScheduler');
 
 const PORT = process.env.PORT || 3000;
 
@@ -13,6 +14,9 @@ async function startServer() {
 
         // Initialize resume upload scheduler
         await initScheduler();
+
+        // Initialize daily export scheduler (8 AM IST)
+        await initExportScheduler();
 
         // Start Express server
         app.listen(PORT, () => {

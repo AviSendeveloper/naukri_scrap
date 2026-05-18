@@ -47,6 +47,7 @@ async function getConfig() {
                 ai_provider: dbConfig.ai_provider || 'ollama',
                 ai_model: dbConfig.ai_model || 'qwen2.5:7b',
                 ai_api_key_set: !!dbConfig.ai_api_key, // never expose the actual key
+                exportEmail: dbConfig.exportEmail || '',
             };
         }
     } catch (err) {
@@ -75,6 +76,7 @@ async function updateConfig(data) {
         ai_provider: updated.ai_provider || 'ollama',
         ai_model: updated.ai_model || 'qwen2.5:7b',
         ai_api_key_set: !!updated.ai_api_key,
+        exportEmail: updated.exportEmail || '',
     };
 }
 

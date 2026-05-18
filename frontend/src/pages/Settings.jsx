@@ -429,6 +429,39 @@ export default function Settings() {
                         Resume will be uploaded daily at {config.resumeScheduleTime ?? '09:00'} IST
                     </div>
                 </div>
+
+                {/* Export Email */}
+                <div className="settings-card animate-in animate-in-delay-4">
+                    <h3>📧 Export Email</h3>
+                    <p style={{ fontSize: 'var(--font-sm)', color: 'var(--text-muted)', marginBottom: 'var(--space-4)' }}>
+                        Email address where job export reports will be sent. A daily report is also sent at 8:00 AM IST.
+                    </p>
+                    <div className="form-group" style={{ marginBottom: 0 }}>
+                        <label className="form-label">Email Address</label>
+                        <input
+                            className="form-input"
+                            type="email"
+                            placeholder="your-email@gmail.com"
+                            value={config.exportEmail ?? ''}
+                            onChange={e => setConfig(prev => ({
+                                ...prev,
+                                exportEmail: e.target.value
+                            }))}
+                        />
+                    </div>
+                    {config.exportEmail && (
+                        <div style={{
+                            marginTop: 'var(--space-4)',
+                            padding: 'var(--space-3)',
+                            background: 'var(--accent-secondary-muted)',
+                            borderRadius: 'var(--radius-md)',
+                            fontSize: 'var(--font-sm)',
+                            color: 'var(--accent-secondary)'
+                        }}>
+                            Exports will be sent to: {config.exportEmail}
+                        </div>
+                    )}
+                </div>
             </div>
         </div>
     )
