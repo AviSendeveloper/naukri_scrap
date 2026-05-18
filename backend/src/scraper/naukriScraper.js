@@ -582,7 +582,7 @@ class NaukriScraper {
                     const el = document.querySelector(sel);
                     if (el) {
                         const text = el.textContent?.trim() || '';
-                        // Pattern: "1-20 of 1,234 jobs" or "Showing 1 – 20 of 1234"
+                        // Pattern: "1-20 of 1,234 jobs" or "Showing 1 – 20 of 11434"
                         const totalMatch = text.match(/of\s+([\d,]+)/i);
                         if (totalMatch) {
                             result.totalResults = parseInt(totalMatch[1].replace(/,/g, ''), 10);
