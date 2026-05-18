@@ -64,7 +64,6 @@ class OllamaProvider extends BaseAIProvider {
             }
 
             const data = await response.json();
-            console.log('data', data);
             
             const content = data.choices?.[0]?.message?.content;
 
@@ -76,8 +75,6 @@ class OllamaProvider extends BaseAIProvider {
             const cleaned = content.replace(/```json|```/g, '').trim();
             return JSON.parse(cleaned);
         } catch (error) {
-            console.log('error', error);
-
             if (error.name === 'AbortError') {
                 throw new Error(
                     `Local AI request timed out after ${REQUEST_TIMEOUT_MS / 1000}s`
